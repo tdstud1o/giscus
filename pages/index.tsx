@@ -7,7 +7,6 @@ import Comment from '../components/Comment';
 import { Reactions } from '../lib/reactions';
 import { IComment, IReactionGroups } from '../lib/types/adapter';
 import { renderMarkdown } from '../services/github/markdown';
-import { getAppAccessToken } from '../services/github/getAppAccessToken';
 import { useDebounce } from '../lib/hooks';
 import Configuration from '../components/Configuration';
 import { ThemeContext } from '../lib/context';
@@ -32,9 +31,9 @@ export async function getStaticProps({ locale }: GetStaticPropsContext) {
 
   contents[1] = `${afterConfig}\n## ${t('tryItOut')} 👇👇👇\n`;
 
-  const token = await getAppAccessToken(env.demo_repo).catch(() => '');
+  // 自托管部署没有 App 私钥（也不该在构建期用），改用匿名 markdown 渲染。
   const [contentBefore, contentAfter] = await Promise.all(
-    contents.map((section) => renderMarkdown(section, token, env.demo_repo)),
+    contents.map((section) => renderMarkdown(section, '', env.demo_repo)),
   );
 
   const comment: IComment = {

@@ -1,0 +1,24 @@
+name = "giscus"
+main = "worker/index.ts"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 客户端静态产物（next build + scripts/export-static.mjs 生成）
+# html_handling = none：HTML 的路由映射由 worker 自己做（见 serveAssets），
+# 否则 CF 会把 /index.html 307 回 /，与 worker 的重写互相打架成死循环。
+[assets]
+directory = "./out"
+binding = "ASSETS"
+html_handling = "none"
+run_worker_first = true
+
+# 非敏感配置；密钥用 `wrangler secret put` 写入：
+#   GITHUB_PRIVATE_KEY / ENCRYPTION_PASSWORD / GITHUB_CLIENT_SECRET
+[vars]
+GITHUB_APP_ID = "5379713"
+GITHUB_INSTALLATION_ID = "172997037"
+GITHUB_CLIENT_ID = "Iv23liEs4ZIehVxVE1F0"
+ALLOWED_ORIGINS = "https://t1mmoc.github.io,https://blog.tmoc.qzz.io"
+
+[observability]
+enabled = true
