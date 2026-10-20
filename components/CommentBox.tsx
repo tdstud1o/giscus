@@ -1,6 +1,7 @@
 import { MarkdownIcon, MarkGithubIcon, SignOutIcon, TypographyIcon } from '@primer/octicons-react';
 import { ChangeEvent, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { adaptComment, adaptReply, handleCommentClick, processCommentBody } from '../lib/adapter';
+import { ANON_ENABLED, ANON_NICKNAME_KEY, addAnonymousComment } from '../lib/anon';
 import { AuthContext } from '../lib/context';
 import { useGiscusTranslation } from '../lib/i18n';
 import { IComment, IReply } from '../lib/types/adapter';
@@ -9,6 +10,8 @@ import { addDiscussionComment } from '../services/github/addDiscussionComment';
 import { addDiscussionReply } from '../services/github/addDiscussionReply';
 import { renderMarkdown } from '../services/github/markdown';
 
+type CommentMode = 'github' | 'anon';
+
 interface CommentBoxProps {
   discussionId?: string;
   context?: string;
@@ -16,6 +19,9 @@ interface CommentBoxProps {
   className?: string;
   onSubmit: (comment: IComment | IReply) => void;
   onDiscussionCreateRequest?: () => Promise<string>;
+  // 匿名入口：只有主评论框传入（回复框不进匿名模式）
+  anonArticle?: string;
+  onAnonSubmitted?: () => void;
 }
 
 export default function CommentBox({
@@ -25,6 +31,8 @@ export default function CommentBox({
   className = '',
   onSubmit,
   onDiscussionCreateRequest,
+  anonArticle,
+  onAnonSubmitted,
 }: CommentBoxProps) {
   const { t } = useGiscusTranslation();
   const [isPreview, setIsPreview] = useState(false);
@@ -36,11 +44,26 @@ export default function CommentBox({
   const [isReplyOpen, setIsReplyOpen] = useState(false);
   const [isFixedWidth, setIsFixedWidth] = useState(false);
   const [lastHeight, setLastHeight] = useState('');
+  const [mode, setMode] = useState<CommentMode>('github');
+  const [nickname, setNickname] = useState('');
+  const [anonError, setAnonError] = useState('');
   const { token, origin, getLoginUrl, onSignOut } = useContext(AuthContext);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const loginUrl = getLoginUrl(origin);
   const isReply = !!replyToId;
   const placeHolderText = isReply ? t('writeAReply') : t('writeAComment');
+  const allowAnon = ANON_ENABLED && !!anonArticle;
+  const isAnon = allowAnon && mode === 'anon';
+
+  // 昵称记住即可，不必联网；localStorage 只在客户端读，避免 SSR 不一致
+  useEffect(() => {
+    if (!allowAnon) return;
+    try {
+      setNickname(window.localStorage.getItem(ANON_NICKNAME_KEY) || '');
+    } catch {
+      /* 隐私模式下 localStorage 可能抛错，忽略 */
+    }
+  }, [allowAnon]);
 
   useEffect(() => {
     if (isPreview && input !== lastInput) {
@@ -65,7 +88,36 @@ export default function CommentBox({
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (isSubmitting || (!discussionId && !onDiscussionCreateRequest)) return;
+    if (isSubmitting) return;
+
+    // 匿名模式：不走 GitHub GraphQL，交给站方 Worker（GitHub App 代发 Discussion 评论）
+    if (isAnon) {
+      if (!anonArticle) return;
+      const nick = nickname.trim();
+      if (!nick) {
+        setAnonError('请先填写昵称');
+        return;
+      }
+      if (!input.trim()) return;
+      setIsSubmitting(true);
+      setAnonError('');
+      try {
+        await addAnonymousComment({ article: anonArticle, nickname: nick, body: input });
+        try {
+          window.localStorage.setItem(ANON_NICKNAME_KEY, nick);
+        } catch {
+          /* 隐私模式下 localStorage 不可写，忽略 */
+        }
+        reset();
+        onAnonSubmitted?.();
+      } catch (e) {
+        setAnonError(`发布失败：${e instanceof Error ? e.message : String(e)}`);
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    if (!discussionId && !onDiscussionCreateRequest) return;
     setIsSubmitting(true);
 
     const id = discussionId ? discussionId : await onDiscussionCreateRequest();
@@ -96,6 +148,10 @@ export default function CommentBox({
     }
   }, [
     isSubmitting,
+    isAnon,
+    anonArticle,
+    nickname,
+    onAnonSubmitted,
     discussionId,
     input,
     replyToId,
@@ -162,8 +218,8 @@ export default function CommentBox({
           </button>
         </div>
 
-        {!isPreview ? (
-          <div className="gsc-comment-box-md-toolbar">
+        <div className="gsc-comment-box-md-toolbar">
+          {!isPreview ? (
             <button
               className="gsc-toolbar-item"
               type="button"
@@ -176,10 +232,45 @@ export default function CommentBox({
             >
               <TypographyIcon />
             </button>
-          </div>
-        ) : null}
+          ) : null}
+          {allowAnon ? (
+            <button
+              type="button"
+              className={`ml-1 rounded-md border px-2 py-[3px] text-xs font-medium ${
+                isAnon
+                  ? 'border-transparent bg-emerald-600 text-white'
+                  : 'color-bg-secondary color-border-primary color-text-secondary'
+              }`}
+              title={isAnon ? '切回 GitHub 账号发帖' : '切换为匿名发帖（无需登录）'}
+              aria-pressed={isAnon}
+              onClick={() => {
+                setMode(isAnon ? 'github' : 'anon');
+                setAnonError('');
+              }}
+            >
+              {isAnon ? '🕶️ 匿名' : '🐙 GitHub'}
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="gsc-comment-box-main">
+        {isAnon ? (
+          <div className="mb-2 flex items-center gap-2">
+            <input
+              className="form-control input-contrast color-bg-primary color-border-primary w-40 rounded border px-2 py-1 text-sm"
+              type="text"
+              maxLength={24}
+              placeholder="昵称（必填）"
+              aria-label="匿名评论昵称"
+              value={nickname}
+              onChange={(event) => setNickname(event.target.value)}
+              disabled={isSubmitting}
+            />
+            <span className="color-text-secondary text-xs">
+              匿名发布：以该昵称署名，内容由站方机器人代发
+            </span>
+          </div>
+        ) : null}
         {isPreview ? (
           // The <div> element *might* have a child <button> element from
           // GitHub's markdown renderer result that allows keyboard interaction.
@@ -200,10 +291,16 @@ export default function CommentBox({
                 isFixedWidth ? 'gsc-is-fixed-width' : ''
               }`}
               dir="auto"
-              placeholder={token ? placeHolderText : t('signInToComment')}
+              placeholder={
+                isAnon
+                  ? '匿名模式：写点什么…（Ctrl/⌘+Enter 发送）'
+                  : token
+                    ? placeHolderText
+                    : t('signInToComment')
+              }
               onChange={handleTextAreaChange}
               value={input}
-              disabled={!token || isSubmitting}
+              disabled={(!token && !isAnon) || isSubmitting}
               ref={textarea}
               onKeyDown={(event) =>
                 (event.ctrlKey || event.metaKey) && event.key === 'Enter' && handleSubmit()
@@ -231,6 +328,7 @@ export default function CommentBox({
           </button>
         ) : null}
         <div className="gsc-comment-box-buttons">
+          {anonError ? <span className="mr-2 text-xs text-red-500">{anonError}</span> : null}
           {isReply ? (
             <button
               className="btn ml-1 rounded-md border"
@@ -240,13 +338,19 @@ export default function CommentBox({
               {t('cancel')}
             </button>
           ) : null}
-          {token ? (
+          {token || isAnon ? (
             <button
               className="btn btn-primary items-center ml-1 rounded-md border"
               type="submit"
-              disabled={(token && !input.trim()) || isSubmitting}
+              disabled={((token || isAnon) && !input.trim()) || isSubmitting}
             >
-              {isReply ? t('reply') : t('comment')}
+              {isAnon
+                ? isSubmitting
+                  ? '发布中…'
+                  : '匿名发布'
+                : isReply
+                  ? t('reply')
+                  : t('comment')}
             </button>
           ) : (
             <a

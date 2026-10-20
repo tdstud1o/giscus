@@ -60,12 +60,22 @@ export default function Giscus({ onDiscussionCreateRequest, onError }: IGiscusPr
     return id;
   };
 
+  // 匿名入口仅对 pathname/url 之外的普通 term 生效；term 是 Discussion 标题（无前导斜杠），
+  // 站方 Worker 要求以 "/" 开头的站内路径，这里补齐。URL 型 term 直接不启用匿名。
+  const anonArticle = !term || /^https?:/i.test(term) ? '' : `/${term.replace(/^\/+/, '')}`;
+
   const mainCommentBox = (
     <CommentBox
       discussionId={data.discussion.id}
       context={repo}
       onSubmit={addNewComment}
       onDiscussionCreateRequest={handleDiscussionCreateRequest}
+      anonArticle={anonArticle}
+      onAnonSubmitted={() => {
+        // 匿名评论由机器人写入 Discussion，重新拉取即可出现在列表里
+        frontMutators.mutate();
+        backMutators.mutate();
+      }}
     />
   );
 
