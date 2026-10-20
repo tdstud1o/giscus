@@ -347,6 +347,9 @@ async function serveAssets(request: Request, url: URL, env: Env) {
 
   const headers = new Headers(response.headers);
   headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  // 嵌入方用 <script crossorigin="anonymous"> 和 <link crossorigin> 加载 client.js / themes，
+  // 缺 ACAO 会被浏览器按 CORS 失败处理（表现为评论框永远不出现）。
+  headers.set('Access-Control-Allow-Origin', '*');
 
   const isHtml = (headers.get('content-type') || '').includes('text/html');
   if (isHtml) {
