@@ -61,7 +61,11 @@ export default function CommentBox({
   const [isReplyOpen, setIsReplyOpen] = useState(false);
   const [isFixedWidth, setIsFixedWidth] = useState(false);
   const [lastHeight, setLastHeight] = useState('');
-  const [mode, setMode] = useState<CommentMode>('github');
+  // 配了站方评论通道时初始就落在「匿名」，等 identity 到了再切「TD 账号」——
+  // 否则未登录读者会先看到一瞬「使用 GitHub 登录」再被替换，观感割裂。
+  const [mode, setMode] = useState<CommentMode>(() =>
+    ANON_ENABLED && anonArticle ? 'anon' : 'github',
+  );
   const [nickname, setNickname] = useState('');
   const [anonError, setAnonError] = useState('');
   const [identity, setIdentity] = useState<TdIdentity | null>(null);
@@ -76,6 +80,12 @@ export default function CommentBox({
   const isWorker = allowAnon && mode !== 'github';
   const isAnon = allowAnon && mode === 'anon';
   const isAccount = allowAnon && mode === 'account';
+  // 有 GitHub 关联时 login 是用户名（补 @）；没有的话服务端退的是邮箱，不加 @ 前缀
+  const whoLabel = identity
+    ? identity.login.includes('@')
+      ? identity.login
+      : '@' + identity.login
+    : '';
 
   // 订阅父页面下发的博客登录态：登录了就默认用 TD 账号发表，没登录默认匿名。
   // identity 是异步换来的（服务端解密校验），期间先显示「正在识别…」。
@@ -369,7 +379,7 @@ export default function CommentBox({
         {isAccount && identity ? (
           <div className="color-text-secondary mb-2 flex flex-wrap items-center gap-2 text-xs">
             <span>
-              以 <strong>@{identity.login}</strong> 身份发表（TD 统一账号
+              以 <strong>{whoLabel}</strong> 身份发表（TD 统一账号
               {identity.isAdmin ? ' · 站主' : identity.isFriend ? ' · 好友' : ''}）
             </span>
             <button
@@ -423,7 +433,7 @@ export default function CommentBox({
               dir="auto"
               placeholder={
                 isAccount
-                  ? `以 @${identity?.login || 'TD 账号'} 身份发表…（Ctrl/⌘+Enter 发送）`
+                  ? `以 ${whoLabel || 'TD 账号'} 身份发表…（Ctrl/⌘+Enter 发送）`
                   : isAnon
                     ? '匿名模式：写点什么…（Ctrl/⌘+Enter 发送）'
                     : token
