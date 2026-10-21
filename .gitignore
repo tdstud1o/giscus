@@ -48,3 +48,6 @@ styles/themes/reference.css
 # Cloudflare Worker 本地密钥与构建缓存
 .dev.vars
 .wrangler/
+
+# typescript incremental build info
+*.tsbuildinfo

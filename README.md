@@ -1,5 +1,19 @@
 # [giscus][giscus]
 
+> **本仓库是自托管 fork（tdstud1o/giscus），不是上游。**
+>
+> - 线上实例：<https://giscus.tmoc.qzz.io>，给 `t1mmoc.github.io` / `blog.tmoc.qzz.io` 用
+> - 部署：`next build` + `scripts/export-static.mjs` 出静态产物，由 `worker/index.ts` 在
+>   Cloudflare Worker 里托管；push 到 `main` 后由 `.github/workflows/deploy-cloudflare.yml`
+>   自动构建 + `wrangler deploy` + 同步 Worker 密钥
+> - 评论框有三种身份：**TD 统一账号**（默认，博客登录态经 `postMessage` 传入）、
+>   **匿名**（自填昵称，由站方机器人代发）、**GitHub**（走 OAuth）
+> - GitHub App 与 TD 统一身份平台**共用同一个**：`TD-Studio-app`（tdstud1o）。
+>   读者在平台授权过一次，这里不会再弹新的授权
+> - 旧仓库 `t1mmoc/giscus` 已归档，历史提交在那里面
+>
+> 上游文档从下一段开始，未改动。
+
 A comments system powered by [GitHub Discussions][discussions]. Let visitors leave comments and reactions on your website via GitHub! Heavily inspired by [utterances][utterances].
 
 - [Open source][repo]. 🌏
