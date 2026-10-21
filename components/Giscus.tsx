@@ -64,10 +64,16 @@ export default function Giscus({ onDiscussionCreateRequest, onError }: IGiscusPr
   // 站方 Worker 要求以 "/" 开头的站内路径，这里补齐。URL 型 term 直接不启用匿名。
   const anonArticle = !term || /^https?:/i.test(term) ? '' : `/${term.replace(/^\/+/, '')}`;
 
-  // 站方 Worker 代发的评论（TD 账号 / 匿名）绕过了本地 mutator，写完统一重新拉一遍
+  // 站方 Worker 代发的评论（TD 账号 / 匿名）绕过了本地 mutator，写完统一重新拉一遍。
+  // GitHub 侧刚写入的评论，列表查询可能差一两秒才可见 —— 补一次延时重拉，
+  // 否则读者要手动刷新才看到自己刚发的回复。
   const revalidate = () => {
     frontMutators.mutate();
     backMutators.mutate();
+    window.setTimeout(() => {
+      frontMutators.mutate();
+      backMutators.mutate();
+    }, 1500);
   };
 
   const mainCommentBox = (
