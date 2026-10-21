@@ -15,9 +15,12 @@ run_worker_first = true
 # 非敏感配置；密钥用 `wrangler secret put` 写入：
 #   GITHUB_PRIVATE_KEY / ENCRYPTION_PASSWORD / GITHUB_CLIENT_SECRET
 [vars]
-GITHUB_APP_ID = "5379713"
-GITHUB_INSTALLATION_ID = "172997037"
-GITHUB_CLIENT_ID = "Iv23liEs4ZIehVxVE1F0"
+# 与 TD 统一身份平台同一个 GitHub App（TD-Studio-app / tdstud1o）。
+# 一个 App 覆盖「平台登录 + 评论登录 + 机器人代发」，读者授权过一次就不会再被要求授权。
+GITHUB_APP_ID = "5398189"
+GITHUB_CLIENT_ID = "Iv23liWrDD6vqVtmGndf"
+# 不写死 installation id：appToken.ts 会用 /repos/{owner}/{repo}/installation 现查，
+# 这样换仓库 / 换安装范围都不用改配置。
 ALLOWED_ORIGINS = "https://t1mmoc.github.io,https://blog.tmoc.qzz.io"
 
 [observability]
