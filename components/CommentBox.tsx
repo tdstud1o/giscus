@@ -395,7 +395,7 @@ export default function CommentBox({
           </div>
         ) : null}
         {isAnon ? (
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <input
               className="form-control input-contrast color-bg-primary color-border-primary w-40 rounded border px-2 py-1 text-sm"
               type="text"
@@ -409,6 +409,17 @@ export default function CommentBox({
             <span className="color-text-secondary text-xs">
               匿名发布：以该昵称署名，内容由站方机器人代发
             </span>
+            {!identity && tdLogin ? (
+              <a
+                className="link-secondary inline-flex items-center gap-1 text-xs"
+                href={tdLogin}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="登录后以 TD 统一账号身份署名，不用每次手填昵称"
+              >
+                <PersonIcon fill="currentColor" /> 用 TD 账号登录
+              </a>
+            ) : null}
           </div>
         ) : null}
         {isPreview ? (
