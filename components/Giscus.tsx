@@ -65,15 +65,15 @@ export default function Giscus({ onDiscussionCreateRequest, onError }: IGiscusPr
   const anonArticle = !term || /^https?:/i.test(term) ? '' : `/${term.replace(/^\/+/, '')}`;
 
   // 站方 Worker 代发的评论（TD 账号 / 匿名）绕过了本地 mutator，写完统一重新拉一遍。
-  // GitHub 侧刚写入的评论，列表查询可能差一两秒才可见 —— 补一次延时重拉，
-  // 否则读者要手动刷新才看到自己刚发的回复。
+  // GitHub 侧刚写入的评论，列表查询要过几秒才反映出来 —— 补几次延时重拉，
+  // 否则读者以为没发出去、手动刷新才看到。
   const revalidate = () => {
-    frontMutators.mutate();
-    backMutators.mutate();
-    window.setTimeout(() => {
+    const pull = () => {
       frontMutators.mutate();
       backMutators.mutate();
-    }, 1500);
+    };
+    pull();
+    [1200, 3000, 6000].forEach((ms) => window.setTimeout(pull, ms));
   };
 
   const mainCommentBox = (
