@@ -1,6 +1,7 @@
 import Head from 'next/head';
 import { useContext, useEffect, useState } from 'react';
 import Widget from '../components/Widget';
+import { setTdSession } from '../lib/anon';
 import { ConfigContext, ThemeContext } from '../lib/context';
 import { availableLanguages } from '../lib/i18n';
 import { InputPosition, ISetConfigMessage } from '../lib/types/giscus';
@@ -100,6 +101,17 @@ export default function WidgetPage() {
       if (typeof event.data !== 'object' || !event.data.giscus) return;
 
       const giscusData = event.data.giscus;
+
+      // 父页面（博客）下发的博客登录态：localStorage 是分页分区的，iframe 读不到，
+      // 只能由父页面显式 postMessage 过来。空串 = 确认未登录，用来清掉旧身份。
+      if ('tdSession' in giscusData) {
+        setTdSession(
+          String(giscusData.tdSession || ''),
+          typeof giscusData.tdLoginUrl === 'string' ? giscusData.tdLoginUrl : undefined,
+        );
+        if (!('setConfig' in giscusData)) return;
+      }
+
       if (!('setConfig' in giscusData)) return;
 
       const { setConfig: newConfig } = giscusData as ISetConfigMessage;

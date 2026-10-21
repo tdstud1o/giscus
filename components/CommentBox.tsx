@@ -1,7 +1,21 @@
-import { MarkdownIcon, MarkGithubIcon, SignOutIcon, TypographyIcon } from '@primer/octicons-react';
+import {
+  MarkdownIcon,
+  MarkGithubIcon,
+  PersonIcon,
+  SignOutIcon,
+  TypographyIcon,
+} from '@primer/octicons-react';
 import { ChangeEvent, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { adaptComment, adaptReply, handleCommentClick, processCommentBody } from '../lib/adapter';
-import { ANON_ENABLED, ANON_NICKNAME_KEY, addAnonymousComment } from '../lib/anon';
+import {
+  ANON_ENABLED,
+  ANON_NICKNAME_KEY,
+  TdIdentity,
+  getTdIdentity,
+  getTdLoginUrl,
+  subscribeTdIdentity,
+  submitComment,
+} from '../lib/anon';
 import { AuthContext } from '../lib/context';
 import { useGiscusTranslation } from '../lib/i18n';
 import { IComment, IReply } from '../lib/types/adapter';
@@ -10,7 +24,10 @@ import { addDiscussionComment } from '../services/github/addDiscussionComment';
 import { addDiscussionReply } from '../services/github/addDiscussionReply';
 import { renderMarkdown } from '../services/github/markdown';
 
-type CommentMode = 'github' | 'anon';
+// github = 上游 GitHub 账号（写 GraphQL，可回复/点赞）
+// account = 博客的 TD 统一平台账号（交给站方 Worker 代发，按 github_login 署名）
+// anon    = 不登录，自填昵称
+type CommentMode = 'github' | 'account' | 'anon';
 
 interface CommentBoxProps {
   discussionId?: string;
@@ -47,13 +64,35 @@ export default function CommentBox({
   const [mode, setMode] = useState<CommentMode>('github');
   const [nickname, setNickname] = useState('');
   const [anonError, setAnonError] = useState('');
+  const [identity, setIdentity] = useState<TdIdentity | null>(null);
+  const [tdLogin, setTdLogin] = useState('');
   const { token, origin, getLoginUrl, onSignOut } = useContext(AuthContext);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const loginUrl = getLoginUrl(origin);
   const isReply = !!replyToId;
   const placeHolderText = isReply ? t('writeAReply') : t('writeAComment');
   const allowAnon = ANON_ENABLED && !!anonArticle;
+  // 走站方 Worker 代发的两种模式（TD 账号 / 匿名），只有主评论框支持
+  const isWorker = allowAnon && mode !== 'github';
   const isAnon = allowAnon && mode === 'anon';
+  const isAccount = allowAnon && mode === 'account';
+
+  // 订阅父页面下发的博客登录态：登录了就默认用 TD 账号发表，没登录默认匿名。
+  // identity 是异步换来的（服务端解密校验），期间先显示「正在识别…」。
+  useEffect(() => {
+    if (!allowAnon) return;
+    const apply = () => {
+      const id = getTdIdentity();
+      setIdentity(id);
+      setTdLogin(getTdLoginUrl());
+      setMode((prev) => {
+        if (id) return 'account';
+        return prev === 'account' ? 'anon' : prev;
+      });
+    };
+    apply();
+    return subscribeTdIdentity(apply);
+  }, [allowAnon]);
 
   // 昵称记住即可，不必联网；localStorage 只在客户端读，避免 SSR 不一致
   useEffect(() => {
@@ -90,11 +129,12 @@ export default function CommentBox({
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
 
-    // 匿名模式：不走 GitHub GraphQL，交给站方 Worker（GitHub App 代发 Discussion 评论）
-    if (isAnon) {
+    // TD 账号 / 匿名：不走 GitHub GraphQL，交给站方 Worker（GitHub App 代发 Discussion 评论）。
+    // 账号模式下昵称由服务端从会话里取（前端传了也不认），匿名模式必须自填。
+    if (isWorker) {
       if (!anonArticle) return;
       const nick = nickname.trim();
-      if (!nick) {
+      if (isAnon && !nick) {
         setAnonError('请先填写昵称');
         return;
       }
@@ -102,16 +142,30 @@ export default function CommentBox({
       setIsSubmitting(true);
       setAnonError('');
       try {
-        await addAnonymousComment({ article: anonArticle, nickname: nick, body: input });
-        try {
-          window.localStorage.setItem(ANON_NICKNAME_KEY, nick);
-        } catch {
-          /* 隐私模式下 localStorage 不可写，忽略 */
+        await submitComment({
+          article: anonArticle,
+          nickname: isAnon ? nick : undefined,
+          body: input,
+        });
+        if (isAnon) {
+          try {
+            window.localStorage.setItem(ANON_NICKNAME_KEY, nick);
+          } catch {
+            /* 隐私模式下 localStorage 不可写，忽略 */
+          }
         }
         reset();
         onAnonSubmitted?.();
       } catch (e) {
-        setAnonError(`发布失败：${e instanceof Error ? e.message : String(e)}`);
+        const code = e instanceof Error ? e.message : String(e);
+        const friendly: Record<string, string> = {
+          session_expired: '博客登录已过期，刷新页面重新登录，或改用匿名昵称',
+          rate_limited: '发得太快了，歇几分钟再试',
+          bad_nickname: '昵称长度需在 1–24 字之间',
+          bad_body: '正文为空或超过 5000 字',
+          anon_disabled: '评论功能暂未开放',
+        };
+        setAnonError(`发布失败：${friendly[code] || code}`);
         setIsSubmitting(false);
       }
       return;
@@ -148,6 +202,7 @@ export default function CommentBox({
     }
   }, [
     isSubmitting,
+    isWorker,
     isAnon,
     anonArticle,
     nickname,
@@ -233,27 +288,102 @@ export default function CommentBox({
               <TypographyIcon />
             </button>
           ) : null}
-          {allowAnon ? (
-            <button
-              type="button"
-              className={`ml-1 rounded-md border px-2 py-[3px] text-xs font-medium ${
-                isAnon
-                  ? 'border-transparent bg-emerald-600 text-white'
-                  : 'color-bg-secondary color-border-primary color-text-secondary'
-              }`}
-              title={isAnon ? '切回 GitHub 账号发帖' : '切换为匿名发帖（无需登录）'}
-              aria-pressed={isAnon}
-              onClick={() => {
-                setMode(isAnon ? 'github' : 'anon');
-                setAnonError('');
-              }}
-            >
-              {isAnon ? '🕶️ 匿名' : '🐙 GitHub'}
-            </button>
+          {allowAnon && !isReply ? (
+            <div className="ml-1 flex items-center gap-1">
+              {identity ? (
+                <>
+                  <button
+                    type="button"
+                    className={`rounded-md border px-2 py-[3px] text-xs font-medium ${
+                      isAccount
+                        ? 'border-transparent bg-emerald-600 text-white'
+                        : 'color-bg-secondary color-border-primary color-text-secondary'
+                    }`}
+                    title="以博客登录的 TD 账号身份发表"
+                    aria-pressed={isAccount}
+                    onClick={() => {
+                      setMode('account');
+                      setAnonError('');
+                    }}
+                  >
+                    👤 {identity.login}
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-md border px-2 py-[3px] text-xs font-medium ${
+                      isAnon
+                        ? 'border-transparent bg-emerald-600 text-white'
+                        : 'color-bg-secondary color-border-primary color-text-secondary'
+                    }`}
+                    title="匿名发表：自填昵称，不关联账号"
+                    aria-pressed={isAnon}
+                    onClick={() => {
+                      setMode('anon');
+                      setAnonError('');
+                    }}
+                  >
+                    🕶️ 匿名
+                  </button>
+                  {token ? (
+                    <button
+                      type="button"
+                      className={`rounded-md border px-2 py-[3px] text-xs font-medium ${
+                        mode === 'github'
+                          ? 'border-transparent bg-emerald-600 text-white'
+                          : 'color-bg-secondary color-border-primary color-text-secondary'
+                      }`}
+                      title="切回 GitHub 账号发帖（可回复、点赞）"
+                      aria-pressed={mode === 'github'}
+                      onClick={() => {
+                        setMode('github');
+                        setAnonError('');
+                      }}
+                    >
+                      🐙 GitHub
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className={`rounded-md border px-2 py-[3px] text-xs font-medium ${
+                    isAnon
+                      ? 'border-transparent bg-emerald-600 text-white'
+                      : 'color-bg-secondary color-border-primary color-text-secondary'
+                  }`}
+                  title={isAnon ? '切回 GitHub 账号发帖' : '切换为匿名发帖（无需登录）'}
+                  aria-pressed={isAnon}
+                  onClick={() => {
+                    setMode(isAnon ? 'github' : 'anon');
+                    setAnonError('');
+                  }}
+                >
+                  {isAnon ? '🕶️ 匿名' : '🐙 GitHub'}
+                </button>
+              )}
+            </div>
           ) : null}
         </div>
       </div>
       <div className="gsc-comment-box-main">
+        {isAccount && identity ? (
+          <div className="color-text-secondary mb-2 flex flex-wrap items-center gap-2 text-xs">
+            <span>
+              以 <strong>@{identity.login}</strong> 身份发表（TD 统一账号
+              {identity.isAdmin ? ' · 站主' : identity.isFriend ? ' · 好友' : ''}）
+            </span>
+            <button
+              type="button"
+              className="link-secondary"
+              onClick={() => {
+                setMode('anon');
+                setAnonError('');
+              }}
+            >
+              改用匿名
+            </button>
+          </div>
+        ) : null}
         {isAnon ? (
           <div className="mb-2 flex items-center gap-2">
             <input
@@ -292,15 +422,17 @@ export default function CommentBox({
               }`}
               dir="auto"
               placeholder={
-                isAnon
-                  ? '匿名模式：写点什么…（Ctrl/⌘+Enter 发送）'
-                  : token
-                    ? placeHolderText
-                    : t('signInToComment')
+                isAccount
+                  ? `以 @${identity?.login || 'TD 账号'} 身份发表…（Ctrl/⌘+Enter 发送）`
+                  : isAnon
+                    ? '匿名模式：写点什么…（Ctrl/⌘+Enter 发送）'
+                    : token
+                      ? placeHolderText
+                      : t('signInToComment')
               }
               onChange={handleTextAreaChange}
               value={input}
-              disabled={(!token && !isAnon) || isSubmitting}
+              disabled={(!token && !isWorker) || isSubmitting}
               ref={textarea}
               onKeyDown={(event) =>
                 (event.ctrlKey || event.metaKey) && event.key === 'Enter' && handleSubmit()
@@ -338,20 +470,32 @@ export default function CommentBox({
               {t('cancel')}
             </button>
           ) : null}
-          {token || isAnon ? (
+          {token || isWorker ? (
             <button
               className="btn btn-primary items-center ml-1 rounded-md border"
               type="submit"
-              disabled={((token || isAnon) && !input.trim()) || isSubmitting}
+              disabled={!input.trim() || isSubmitting}
             >
-              {isAnon
+              {isWorker
                 ? isSubmitting
                   ? '发布中…'
-                  : '匿名发布'
+                  : isAccount
+                    ? '发表'
+                    : '匿名发布'
                 : isReply
                   ? t('reply')
                   : t('comment')}
             </button>
+          ) : tdLogin ? (
+            // 博客已接入 TD 统一平台：未登录时优先引导走平台，一次登录全站通用
+            <a
+              className="btn btn-primary inline-flex items-center ml-1 rounded-md border hover:no-underline"
+              target="_blank"
+              rel="noopener noreferrer"
+              href={tdLogin}
+            >
+              <PersonIcon className="mr-2" fill="currentColor" /> 用 TD 账号登录
+            </a>
           ) : (
             <a
               className="btn btn-primary inline-flex items-center ml-1 rounded-md border hover:no-underline"
