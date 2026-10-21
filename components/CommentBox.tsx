@@ -52,6 +52,7 @@ export default function CommentBox({
   onAnonSubmitted,
 }: CommentBoxProps) {
   const { t } = useGiscusTranslation();
+  const { token, origin, getLoginUrl, onSignOut } = useContext(AuthContext);
   const [isPreview, setIsPreview] = useState(false);
   const [input, setInput] = useState('');
   const [lastInput, setLastInput] = useState('');
@@ -61,22 +62,22 @@ export default function CommentBox({
   const [isReplyOpen, setIsReplyOpen] = useState(false);
   const [isFixedWidth, setIsFixedWidth] = useState(false);
   const [lastHeight, setLastHeight] = useState('');
-  // 配了站方评论通道时初始就落在「匿名」，等 identity 到了再切「TD 账号」——
-  // 否则未登录读者会先看到一瞬「使用 GitHub 登录」再被替换，观感割裂。
+  // 配了站方评论通道时，未登录读者初始就落在「匿名」，等 identity 到了再切「TD 账号」——
+  // 否则会先看到一瞬「使用 GitHub 登录」再被替换，观感割裂。
+  // 已经有 giscus GitHub 授权（token）的人仍默认走 GitHub，不夺走他们的既有习惯。
   const [mode, setMode] = useState<CommentMode>(() =>
-    ANON_ENABLED && anonArticle ? 'anon' : 'github',
+    ANON_ENABLED && anonArticle && !token ? 'anon' : 'github',
   );
   const [nickname, setNickname] = useState('');
   const [anonError, setAnonError] = useState('');
   const [identity, setIdentity] = useState<TdIdentity | null>(null);
   const [tdLogin, setTdLogin] = useState('');
-  const { token, origin, getLoginUrl, onSignOut } = useContext(AuthContext);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const loginUrl = getLoginUrl(origin);
   const isReply = !!replyToId;
   const placeHolderText = isReply ? t('writeAReply') : t('writeAComment');
   const allowAnon = ANON_ENABLED && !!anonArticle;
-  // 走站方 Worker 代发的两种模式（TD 账号 / 匿名），只有主评论框支持
+  // 走站方 Worker 代发的两种模式（TD 账号 / 匿名）：主评论框与回复框都支持
   const isWorker = allowAnon && mode !== 'github';
   const isAnon = allowAnon && mode === 'anon';
   const isAccount = allowAnon && mode === 'account';
@@ -156,6 +157,7 @@ export default function CommentBox({
           article: anonArticle,
           nickname: isAnon ? nick : undefined,
           body: input,
+          replyTo: replyToId,
         });
         if (isAnon) {
           try {
@@ -173,6 +175,7 @@ export default function CommentBox({
           rate_limited: '发得太快了，歇几分钟再试',
           bad_nickname: '昵称长度需在 1–24 字之间',
           bad_body: '正文为空或超过 5000 字',
+          bad_reply_to: '要回复的评论已不存在（可能已被删除），刷新后再试',
           anon_disabled: '评论功能暂未开放',
         };
         setAnonError(`发布失败：${friendly[code] || code}`);
@@ -379,7 +382,7 @@ export default function CommentBox({
         {isAccount && identity ? (
           <div className="color-text-secondary mb-2 flex flex-wrap items-center gap-2 text-xs">
             <span>
-              以 <strong>{whoLabel}</strong> 身份发表（TD 统一账号
+              以 <strong>{whoLabel}</strong> 身份{isReply ? '回复' : '发表'}（TD 统一账号
               {identity.isAdmin ? ' · 站主' : identity.isFriend ? ' · 好友' : ''}）
             </span>
             <button
@@ -444,9 +447,11 @@ export default function CommentBox({
               dir="auto"
               placeholder={
                 isAccount
-                  ? `以 ${whoLabel || 'TD 账号'} 身份发表…（Ctrl/⌘+Enter 发送）`
+                  ? `以 ${whoLabel || 'TD 账号'} 身份${isReply ? '回复' : '发表'}…（Ctrl/⌘+Enter 发送）`
                   : isAnon
-                    ? '匿名模式：写点什么…（Ctrl/⌘+Enter 发送）'
+                    ? isReply
+                      ? '匿名回复：写点什么…（Ctrl/⌘+Enter 发送）'
+                      : '匿名模式：写点什么…（Ctrl/⌘+Enter 发送）'
                     : token
                       ? placeHolderText
                       : t('signInToComment')
@@ -501,8 +506,12 @@ export default function CommentBox({
                 ? isSubmitting
                   ? '发布中…'
                   : isAccount
-                    ? '发表'
-                    : '匿名发布'
+                    ? isReply
+                      ? '回复'
+                      : '发表'
+                    : isReply
+                      ? '匿名回复'
+                      : '匿名发布'
                 : isReply
                   ? t('reply')
                   : t('comment')}

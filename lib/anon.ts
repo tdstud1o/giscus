@@ -120,6 +120,8 @@ export interface CommentParams {
   // 匿名时才用；TD 账号模式下服务端忽略它
   nickname?: string;
   body: string;
+  // 父评论 node id（DC_xxx）：填了就是回复，服务端校验它属于本文对应的 Discussion
+  replyTo?: string;
 }
 
 interface CommentResponse {
@@ -132,10 +134,17 @@ export async function submitComment(params: CommentParams): Promise<string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (tdSession) headers['x-session'] = tdSession;
 
+  const payload = {
+    article: params.article,
+    nickname: params.nickname,
+    body: params.body,
+    ...(params.replyTo ? { reply_to: params.replyTo } : {}),
+  };
+
   const res = await fetch(ANON_ENDPOINT, {
     method: 'POST',
     headers,
-    body: JSON.stringify(params),
+    body: JSON.stringify(payload),
   });
 
   let json: CommentResponse | null = null;

@@ -64,6 +64,12 @@ export default function Giscus({ onDiscussionCreateRequest, onError }: IGiscusPr
   // 站方 Worker 要求以 "/" 开头的站内路径，这里补齐。URL 型 term 直接不启用匿名。
   const anonArticle = !term || /^https?:/i.test(term) ? '' : `/${term.replace(/^\/+/, '')}`;
 
+  // 站方 Worker 代发的评论（TD 账号 / 匿名）绕过了本地 mutator，写完统一重新拉一遍
+  const revalidate = () => {
+    frontMutators.mutate();
+    backMutators.mutate();
+  };
+
   const mainCommentBox = (
     <CommentBox
       discussionId={data.discussion.id}
@@ -71,11 +77,7 @@ export default function Giscus({ onDiscussionCreateRequest, onError }: IGiscusPr
       onSubmit={addNewComment}
       onDiscussionCreateRequest={handleDiscussionCreateRequest}
       anonArticle={anonArticle}
-      onAnonSubmitted={() => {
-        // 匿名评论由机器人写入 Discussion，重新拉取即可出现在列表里
-        frontMutators.mutate();
-        backMutators.mutate();
-      }}
+      onAnonSubmitted={revalidate}
     />
   );
 
@@ -206,12 +208,16 @@ export default function Giscus({ onDiscussionCreateRequest, onError }: IGiscusPr
                   key={comment.id}
                   comment={comment}
                   replyBox={
-                    token && !data.isLocked ? (
+                    // 回复不再强制 giscus 自己的 GitHub 授权：博客已登录（TD 账号）或
+                    // 愿意填昵称的读者都能回复，内容由站方 Worker 带 reply_to 代发
+                    !data.isLocked && (token || anonArticle) ? (
                       <CommentBox
                         discussionId={data.discussion.id}
                         context={repo}
                         onSubmit={frontMutators.addNewReply}
                         replyToId={comment.id}
+                        anonArticle={anonArticle}
+                        onAnonSubmitted={revalidate}
                       />
                     ) : undefined
                   }
@@ -244,12 +250,14 @@ export default function Giscus({ onDiscussionCreateRequest, onError }: IGiscusPr
                   key={comment.id}
                   comment={comment}
                   replyBox={
-                    token && !data.isLocked ? (
+                    !data.isLocked && (token || anonArticle) ? (
                       <CommentBox
                         discussionId={data.discussion.id}
                         context={repo}
                         onSubmit={backMutators.addNewReply}
                         replyToId={comment.id}
+                        anonArticle={anonArticle}
+                        onAnonSubmitted={revalidate}
                       />
                     ) : undefined
                   }
