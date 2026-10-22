@@ -94,6 +94,28 @@ async function checkUserToken(env: Env, token?: string): Promise<boolean> {
 
 // ───────────────────────────── /api/discussions ─────────────────────────────
 
+/**
+ * 从搜索结果里挑出真正属于这个 term 的那条 Discussion。
+ *
+ * GitHub 的 search 是分词匹配（`in:title "posts/foo"` 也会命中 `posts/foo-bar`），
+ * 所以放宽搜索之后必须按标题对账，否则会把别的页面的评论显示到这篇下面。
+ * strict 模式搜的是正文里的 sha1（标题里没有 hash），命中即唯一，直接取第一条。
+ */
+function pickDiscussionByTerm(nodes: any[], term: string, strict: boolean) {
+  const list = (Array.isArray(nodes) ? nodes : []).filter((node) => node && node.id);
+  if (!list.length) return null;
+  if (strict) return list[0];
+  const normalize = (value: unknown) => String(value ?? '').replace(/^\/+|\/+$/g, '');
+  const target = normalize(term);
+  const matched = list.filter((node) => node.title === term || normalize(node.title) === target);
+  if (!matched.length) return null;
+  // 同标题不止一条（搜索口径出过 bug，历史上攒下过重复）→ 取最早创建的那条。
+  // 评论都在最早的讨论上，取最新的会把读者带到一条只有零星几条的空壳上。
+  return matched.sort((a, b) =>
+    String(a.createdAt || '').localeCompare(String(b.createdAt || '')),
+  )[0];
+}
+
 async function discussionsGet(request: Request, url: URL, env: Env) {
   const query = url.searchParams;
   const first = query.get('first');
@@ -149,9 +171,7 @@ async function discussionsGet(request: Request, url: URL, env: Env) {
   const { viewer } = data;
   const discussion =
     'search' in data
-      ? data.search.discussionCount > 0
-        ? data.search.nodes[0]
-        : null
+      ? pickDiscussionByTerm(data.search.nodes || [], String(params.term || ''), !!params.strict)
       : data.repository.discussion;
 
   // 「Discussion 还没建」不等于「没有读者身份」：viewer 早就查回来了，一起带出去。
@@ -185,6 +205,20 @@ async function discussionsPost(request: Request, env: Env) {
     token = await getAppAccessToken(env, repo);
   } catch (error) {
     return json({ error: errorMessage(error) }, 403);
+  }
+
+  // 幂等：前端是因为「查不到 Discussion」才来建的，依据是同一套搜索。一旦搜索口径
+  // 有偏差或 GitHub 索引滞后，就会建出同标题的第二条（线上真出现过同标题 3 条）。
+  // 建之前按标题再查一次，命中即复用，不新建。
+  try {
+    const probe: any = await getDiscussion(
+      { repo, term: input.title, category: '', number: 0, strict: false, first: 1 } as any,
+      token,
+    );
+    const existing = pickDiscussionByTerm(probe?.data?.search?.nodes || [], input.title, false);
+    if (existing) return json({ id: existing.id, reused: true });
+  } catch {
+    // 查重失败（网络/限流）不该挡住正常建帖，继续往下走
   }
 
   const response: any = await createDiscussion(token, { input });

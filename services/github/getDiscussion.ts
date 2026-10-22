@@ -6,6 +6,8 @@ import { GITHUB_GRAPHQL_API_URL } from '../config';
 const DISCUSSION_QUERY = `
   id
   url
+  title
+  createdAt
   locked
   repository {
     nameWithOwner
@@ -88,7 +90,7 @@ const DISCUSSION_QUERY = `
   }`;
 
 const SEARCH_QUERY = `
-  search(type: DISCUSSION last: 1 query: $query) {
+  search(type: DISCUSSION last: 20 query: $query) {
     discussionCount
     nodes {
       ... on Discussion {
@@ -148,11 +150,19 @@ export async function getDiscussion(
   const resolvedTerm = strict ? await digestMessage(term) : term;
   const searchIn = strict ? 'in:body' : 'in:title';
 
+  // GitHub 的 `in:title "..."` 短语搜索匹配不到「以 / 结尾」的标题：
+  //   in:title "posts/foo/"  → 0 条
+  //   in:title "posts/foo"   → 命中
+  // 而 pathname mapping 产出的 term 恰好必带尾斜杠（location.pathname.substring(1)），
+  // 于是永远查不到已有 Discussion → 每次「发首条」都新建一条（线上同标题已经攒了 3 条）。
+  // 搜索时剥掉尾随斜杠，命中后再由调用方按 title 精确比对（分词搜索会带出相似标题）。
+  const searchTerm = strict ? resolvedTerm : resolvedTerm.replace(/\/+$/, '') || resolvedTerm;
+
   // Force repo to lowercase to prevent GitHub's bug when using category in query.
   // https://github.com/giscus/giscus/issues/118
   const repo = repoWithOwner.toLowerCase();
   const categoryQuery = category ? `category:${JSON.stringify(category)}` : '';
-  const query = `repo:${repo} ${categoryQuery} ${searchIn} ${JSON.stringify(resolvedTerm)}`;
+  const query = `repo:${repo} ${categoryQuery} ${searchIn} ${JSON.stringify(searchTerm)}`;
   const gql = GET_DISCUSSION_QUERY(number ? 'number' : 'term');
 
   return fetch(GITHUB_GRAPHQL_API_URL, {
