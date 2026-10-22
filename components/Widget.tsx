@@ -60,15 +60,44 @@ export default function Widget({ origin, session }: IWidgetProps) {
     }
   }, [handleError, session, token]);
 
+  // 父页（博客）的 iframe 高度全靠这里回传。两条通道：
+  //   1. ResizeObserver —— 常规通道，尺寸一变就报；
+  //   2. MutationObserver —— 兜底。跨域 iframe 在视口外时，Chromium 会挂起它的渲染更新，
+  //      ResizeObserver 的回调不再投递（连 observe() 的初始回调都收不到），但 JS 与布局照跑，
+  //      DOM 变更照样通知。没有这条兜底，离屏的评论框会一直停在父页 CSS 的 min-height，
+  //      直到用户把它滚进视口才「突然长出来」。
   useEffect(() => {
-    const observer = new ResizeObserver((entries) => {
+    let lastHeight = 0;
+    const report = (height: number) => {
+      const value = Math.ceil(height);
+      if (!value || value === lastHeight) return;
+      lastHeight = value;
+      emitData<IResizeHeightMessage>({ resizeHeight: value }, origin);
+    };
+
+    const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
-      if (!entry) return;
-      emitData<IResizeHeightMessage>({ resizeHeight: Math.ceil(entry.contentRect.height) }, origin);
+      if (entry) report(entry.contentRect.height);
     });
 
-    observer.observe(document.querySelector('body'));
-    return () => observer.disconnect();
+    let mutationTimer = 0;
+    const mutationObserver = new MutationObserver(() => {
+      window.clearTimeout(mutationTimer);
+      mutationTimer = window.setTimeout(
+        () => report(document.body.getBoundingClientRect().height),
+        150,
+      );
+    });
+
+    const body = document.body;
+    resizeObserver.observe(body);
+    mutationObserver.observe(body, { childList: true, subtree: true, characterData: true });
+
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      window.clearTimeout(mutationTimer);
+    };
   }, [origin]);
 
   const ready = (!session || token) && repo && (term || number);
