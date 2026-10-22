@@ -46,6 +46,7 @@ const DISCUSSION_QUERY = `
       deletedAt
       isMinimized
       bodyHTML
+      body
       reactionGroups {
         content
         users {
@@ -70,6 +71,7 @@ const DISCUSSION_QUERY = `
           deletedAt
           isMinimized
           bodyHTML
+          body
           reactionGroups {
             content
             users {

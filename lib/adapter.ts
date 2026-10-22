@@ -1,6 +1,7 @@
 import { MouseEvent as ReactMouseEvent } from 'react';
 import { IComment, IGiscussion, IReactionGroups, IReply } from './types/adapter';
 import { GComment, GReactionGroup, GReply, GRepositoryDiscussion, GUser } from './types/github';
+import { parseProxied, stripProxiedHeader } from './proxied';
 import { clipboardCopy } from './utils';
 
 const COPY_BUTTON_HTML = `
@@ -38,24 +39,44 @@ export function adaptReply(reply: GReply): IReply {
     reactionGroups,
     replyTo: { id: replyToId },
     author: _author,
+    bodyHTML,
     ...rest
   } = reply;
 
   const reactions = adaptReactionGroups(reactionGroups);
   const author = _author || GhostUser;
+  // 「代谁发的」只可能在站方机器人发的评论里（parseProxied 自己会校验作者）。
+  // 认出代发身份后，正文开头那段机器可读标记 + 人可见署名都不再渲染 —— 头部卡片有了。
+  const proxied = parseProxied(author.login, rest.body);
 
-  return { ...rest, author, reactions, replyToId };
+  return {
+    ...rest,
+    author,
+    reactions,
+    replyToId,
+    proxied,
+    bodyHTML: proxied ? stripProxiedHeader(bodyHTML) : bodyHTML,
+  };
 }
 
 export function adaptComment(comment: GComment): IComment {
-  const { replies: repliesData, reactionGroups, author: _author, ...rest } = comment;
+  const { replies: repliesData, reactionGroups, author: _author, bodyHTML, ...rest } = comment;
   const { totalCount: replyCount, nodes: replyNodes } = repliesData;
 
   const reactions = adaptReactionGroups(reactionGroups);
   const replies = replyNodes.map(adaptReply);
   const author = _author || GhostUser;
+  const proxied = parseProxied(author.login, rest.body);
 
-  return { ...rest, author, replyCount, reactions, replies };
+  return {
+    ...rest,
+    author,
+    replyCount,
+    reactions,
+    replies,
+    proxied,
+    bodyHTML: proxied ? stripProxiedHeader(bodyHTML) : bodyHTML,
+  };
 }
 
 export function adaptDiscussion({

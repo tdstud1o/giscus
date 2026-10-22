@@ -19,6 +19,7 @@ const ADD_DISCUSSION_REPLY_QUERY = `
         deletedAt
         isMinimized
         bodyHTML
+        body
         reactionGroups {
           content
           users {

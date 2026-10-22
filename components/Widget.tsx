@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import Giscus from '../components/Giscus';
 import { AuthContext, ConfigContext, getLoginUrl } from '../lib/context';
+import { getTdIdentity, subscribeTdIdentity } from '../lib/anon';
 import { emitData } from '../lib/messages';
 import { IErrorMessage, IResizeHeightMessage, ISignOutMessage } from '../lib/types/giscus';
 import { cleanAnchor } from '../lib/utils';
@@ -13,7 +14,12 @@ interface IWidgetProps {
 }
 
 export default function Widget({ origin, session }: IWidgetProps) {
-  const [token, setToken] = useState('');
+  // 两条 GitHub 令牌来源，优先用平台那条：
+  //   tdToken —— 读者在 TD 平台绑定过 GitHub，博客后端把令牌换回来下发（一次授权全站通用）；
+  //   ownToken —— giscus 自己的 OAuth 授权（老路径，上游行为，没有平台时才会用到）。
+  const [ownToken, setOwnToken] = useState('');
+  const [tdToken, setTdToken] = useState('');
+  const token = tdToken || ownToken;
   const [createDiscussionPromise, setCreateDiscussionPromise] = useState<Promise<string>>();
   const { repo, repoId, categoryId, description, backLink, term, number } =
     useContext(ConfigContext);
@@ -53,12 +59,20 @@ export default function Widget({ origin, session }: IWidgetProps) {
   }, [origin]);
 
   useEffect(() => {
-    if (session && !token) {
+    if (session && !ownToken) {
       getToken(session)
-        .then(setToken)
+        .then(setOwnToken)
         .catch((err) => handleError(err?.message));
     }
-  }, [handleError, session, token]);
+  }, [handleError, session, ownToken]);
+
+  // TD 平台下发的 GitHub 令牌：父页面 postMessage 送来会话后异步换到，到了就接管。
+  // 读者退登 / 换账号时这里跟着变空，不会留着上一个人的令牌。
+  useEffect(() => {
+    const sync = () => setTdToken(getTdIdentity()?.ghToken || '');
+    sync();
+    return subscribeTdIdentity(sync);
+  }, []);
 
   // 父页（博客）的 iframe 高度全靠这里回传。两条通道：
   //   1. ResizeObserver —— 常规通道，尺寸一变就报；

@@ -5,6 +5,7 @@ import { IComment, IReply } from '../lib/types/adapter';
 import { Reaction, updateCommentReaction } from '../lib/reactions';
 import { toggleUpvote } from '../services/github/toggleUpvote';
 import CommentBox from './CommentBox';
+import { ProxyAuthor } from './ProxyAuthor';
 import ReactButtons from './ReactButtons';
 import Reply from './Reply';
 import { AuthContext } from '../lib/context';
@@ -79,24 +80,29 @@ export default function Comment({
         {!comment.isMinimized ? (
           <div className="gsc-comment-header">
             <div className="gsc-comment-author">
-              <a
-                rel="nofollow noopener noreferrer"
-                target="_blank"
-                href={comment.author.url}
-                className="gsc-comment-author-avatar"
-              >
-                <img
-                  className="mr-2 rounded-full"
-                  src={comment.author.avatarUrl}
-                  width="30"
-                  height="30"
-                  alt={`@${comment.author.login}`}
-                  loading="lazy"
-                />
-                <span className="link-primary overflow-hidden text-ellipsis font-semibold">
-                  {comment.author.login}
-                </span>
-              </a>
+              {comment.proxied ? (
+                // 站方机器人代发：显示真正的委托人（TD 账号 / 匿名 昵称），而不是机器人
+                <ProxyAuthor proxied={comment.proxied} />
+              ) : (
+                <a
+                  rel="nofollow noopener noreferrer"
+                  target="_blank"
+                  href={comment.author.url}
+                  className="gsc-comment-author-avatar"
+                >
+                  <img
+                    className="mr-2 rounded-full"
+                    src={comment.author.avatarUrl}
+                    width="30"
+                    height="30"
+                    alt={`@${comment.author.login}`}
+                    loading="lazy"
+                  />
+                  <span className="link-primary overflow-hidden text-ellipsis font-semibold">
+                    {comment.author.login}
+                  </span>
+                </a>
+              )}
               <a
                 rel="nofollow noopener noreferrer"
                 target="_blank"
@@ -111,7 +117,7 @@ export default function Comment({
                   {formatDateDistance(comment.createdAt)}
                 </time>
               </a>
-              {comment.authorAssociation !== 'NONE' ? (
+              {!comment.proxied && comment.authorAssociation !== 'NONE' ? (
                 <div className="hidden text-xs leading-[18px] sm:inline-flex">
                   <span className="color-box-border-info font-medium capitalize ml-1 rounded-xl border px-[7px]">
                     {t(comment.authorAssociation)}

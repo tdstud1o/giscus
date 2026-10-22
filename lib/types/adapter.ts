@@ -1,4 +1,5 @@
 import { Reactions } from '../reactions';
+import type { ProxiedIdentity } from '../proxied';
 
 export interface IUser {
   avatarUrl: string;
@@ -35,6 +36,10 @@ interface IBaseComment {
   deletedAt: string | null;
   isMinimized: boolean;
   bodyHTML: string;
+  /** 原始 markdown（代发身份标记在里面，见 lib/proxied.ts）。 */
+  body: string;
+  /** 站方机器人代发的身份；普通 GitHub 评论为 null。 */
+  proxied: ProxiedIdentity | null;
   reactions: IReactionGroups;
 }
 

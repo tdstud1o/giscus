@@ -22,6 +22,7 @@ const ADD_DISCUSSION_COMMENT_QUERY = `
         deletedAt
         isMinimized
         bodyHTML
+        body
         reactionGroups {
           content
           users {
@@ -45,6 +46,7 @@ const ADD_DISCUSSION_COMMENT_QUERY = `
             deletedAt
             isMinimized
             bodyHTML
+            body
             reactionGroups {
               content
               users {

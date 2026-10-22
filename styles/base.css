@@ -1176,3 +1176,81 @@ img.emoji {
   width: 12px;
   height: 12px;
 }
+
+/* ---------- 「代谁发的」头部 ----------
+   站方机器人代发的评论（TD 账号 / 匿名）在列表里显示真正的委托人，而不是机器人账号。
+   两个标记的颜色和评论框底部那条身份条完全同源：TD 蓝 / 匿名 黄，深浅主题都够醒目。 */
+
+.gsc-proxy-who {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.gsc-proxy-avatar-img {
+  flex: none;
+  border-radius: 9999px;
+  object-fit: cover;
+}
+
+.gsc-proxy-avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+
+.gsc-proxy-avatar.gsc-proxy-td {
+  color: #fff;
+  background: #0969da;
+}
+
+.gsc-proxy-avatar.gsc-proxy-anon {
+  color: #24292f;
+  background: #d4a72c;
+}
+
+.gsc-proxy-name {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.gsc-proxy-badge {
+  flex: none;
+  padding: 0 7px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.gsc-proxy-badge.gsc-proxy-td {
+  color: #fff;
+  background: #0969da;
+}
+
+.gsc-proxy-badge.gsc-proxy-anon {
+  color: #24292f;
+  background: #d4a72c;
+}
+
+.gsc-proxy-role {
+  flex: none;
+  padding: 0 7px;
+  border: 1px solid rgb(127 127 127 / 35%);
+  border-radius: 9999px;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}

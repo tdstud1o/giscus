@@ -86,9 +86,16 @@ export default function CommentBox({
   const whoLabel = identity
     ? identity.name || (identity.login.includes('@') ? identity.login : '@' + identity.login)
     : '';
-  // 三档是否可选：TD 要平台会话（服务端验签得来），GitHub 要 giscus 自己的授权
+  // 三档是否可选：TD 要平台会话（服务端验签得来），GitHub 要 GitHub 令牌 ——
+  // 令牌优先来自 TD 账号绑定的 GitHub（平台一次授权，见 lib/anon.ts 的 ghToken），
+  // 没有平台时才退回 giscus 自己的 OAuth。
   const canTd = !!identity;
   const canGh = !!token;
+  // GitHub 那一档「需登录」时该去哪：
+  //   已登录 TD 但没绑 GitHub → 平台账户中心的「已绑定身份」（就地绑定 GitHub）；
+  //   没登录 TD → TD 登录页（用 GitHub 登录会顺带建号，符合「只有 TD 权威身份」的模型）；
+  //   没接平台 → 退回 giscus 自己的 GitHub 授权。
+  const ghEntry = identity ? identity.accountUrl || tdLogin || loginUrl : tdLogin || loginUrl;
   // 用户自己拨过滑块之后，identity 异步到达就不改他的选择
   const switchMode = (next: CommentMode) => {
     pickedMode.current = true;
@@ -366,7 +373,9 @@ export default function CommentBox({
                       : '匿名模式：写点什么…（Ctrl/⌘+Enter 发送）'
                     : token
                       ? placeHolderText
-                      : t('signInToComment')
+                      : identity
+                        ? '先在下方 GitHub 那一档绑定你的 GitHub 账号，就能在评论里直接发言'
+                        : t('signInToComment')
               }
               onChange={handleTextAreaChange}
               value={input}
@@ -461,13 +470,17 @@ export default function CommentBox({
               aria-disabled={!canGh}
               title={
                 canGh
-                  ? '以 giscus 授权的 GitHub 账号发表（可回复、点赞）'
-                  : '还没授权 GitHub：点这里去授权，回来就能用这一档'
+                  ? '以你的 GitHub 账号直接发表（原生评论：可回复、可点赞）'
+                  : identity?.ghTokenExpired
+                    ? 'GitHub 授权已过期：点这里去重新授权'
+                    : identity
+                      ? '这个 TD 账号还没绑定 GitHub：点这里去绑定，回来这一档就能用'
+                      : '点这里用 TD 账号登录（可用 GitHub 或邮箱），登录后这一档就能用'
               }
               onClick={() => {
-                // 没有 GitHub 授权时，点这一档 = 直接去授权（不再额外给一条「登录」链接）
+                // 没有 GitHub 令牌时，点这一档 = 直接去登录 / 绑定（不再额外给一条「登录」链接）
                 if (canGh) switchMode('github');
-                else if (loginUrl) window.open(loginUrl, '_top');
+                else if (ghEntry) window.open(ghEntry, '_top');
               }}
             >
               GitHub
@@ -528,7 +541,7 @@ export default function CommentBox({
             <a
               className="btn btn-primary inline-flex items-center ml-1 rounded-md border hover:no-underline"
               target="_top"
-              href={loginUrl}
+              href={ghEntry || loginUrl}
             >
               <MarkGithubIcon className="mr-2" fill="currentColor" /> {t('signInWithGitHub')}
             </a>

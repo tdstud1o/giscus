@@ -36,6 +36,20 @@ export interface TdIdentity {
   // 平台下发的头像（OIDC picture，老会话没有就退回 github.com/<login>.png）。
   // 空串表示这个账号没有头像，UI 退化成首字母。
   avatarUrl: string;
+  /**
+   * 这个 TD 账号绑定的 GitHub 用户令牌（博客后端用服务端密钥向平台换来的）。
+   * 「GitHub」那一档用它直接以读者本人身份给 GitHub 发评论 —— 原生方案，
+   * reactions / 回复通知都是真的，读者也不必再单独给 giscus 授权一次。
+   * 没绑定 GitHub 时是空串（此时那一档显示「需登录」）。
+   * 只存在内存里，不写 localStorage。
+   */
+  ghToken: string;
+  /** 绑定的 GitHub 登录名，用于显示 / 兜底（令牌有但快照没读到时可能为空）。 */
+  ghLogin: string;
+  /** 有绑定但令牌过期（本 App 关掉了过期，正常不会发生）。 */
+  ghTokenExpired: boolean;
+  /** 平台账户中心的「已绑定身份」页 —— 已登录但没绑 GitHub 时点 GitHub 档去这里。 */
+  accountUrl: string;
 }
 
 // —— 父页面下发的会话（模块级，够用且不必穿 React context） ——
@@ -104,6 +118,10 @@ export async function refreshTdIdentity(): Promise<TdIdentity | null> {
       is_friend?: boolean;
       id_level?: string;
       avatar_url?: string;
+      gh_token?: string;
+      gh_login?: string;
+      gh_token_expired?: boolean;
+      account_url?: string;
     };
     if (session !== tdSession) return tdIdentity; // 期间会话被换掉了，丢弃本次结果
     tdIdentity = json?.logged_in
@@ -114,6 +132,10 @@ export async function refreshTdIdentity(): Promise<TdIdentity | null> {
           isFriend: !!json.is_friend,
           level: json.id_level || '',
           avatarUrl: json.avatar_url || '',
+          ghToken: json.gh_token || '',
+          ghLogin: json.gh_login || '',
+          ghTokenExpired: !!json.gh_token_expired,
+          accountUrl: json.account_url || '',
         }
       : null;
   } catch {

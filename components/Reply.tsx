@@ -1,4 +1,5 @@
 import ReactButtons from './ReactButtons';
+import { ProxyAvatar, ProxyName } from './ProxyAuthor';
 import { IReply } from '../lib/types/adapter';
 import { useCallback } from 'react';
 import { Reaction, updateCommentReaction } from '../lib/reactions';
@@ -28,36 +29,44 @@ export default function Reply({ reply, onReplyUpdate }: IReplyProps) {
       <div className="gsc-tl-line" />
       <div className={`flex ${hidden ? 'items-center' : ''}`}>
         <div className="gsc-reply-author-avatar">
-          <a
-            rel="nofollow noopener noreferrer"
-            target="_blank"
-            href={reply.author.url}
-            className="flex items-center"
-          >
-            <img
-              className="rounded-full"
-              src={reply.author.avatarUrl}
-              width="30"
-              height="30"
-              alt={`@${reply.author.login}`}
-              loading="lazy"
-            />
-          </a>
+          {reply.proxied ? (
+            <ProxyAvatar proxied={reply.proxied} />
+          ) : (
+            <a
+              rel="nofollow noopener noreferrer"
+              target="_blank"
+              href={reply.author.url}
+              className="flex items-center"
+            >
+              <img
+                className="rounded-full"
+                src={reply.author.avatarUrl}
+                width="30"
+                height="30"
+                alt={`@${reply.author.login}`}
+                loading="lazy"
+              />
+            </a>
+          )}
         </div>
         <div className="w-full min-w-0 ml-2">
           {!hidden ? (
             <div className="gsc-reply-header">
               <div className="gsc-reply-author">
-                <a
-                  rel="nofollow noopener noreferrer"
-                  target="_blank"
-                  href={reply.author.url}
-                  className="flex min-w-0 items-center"
-                >
-                  <span className="link-primary overflow-hidden text-ellipsis font-semibold">
-                    {reply.author.login}
-                  </span>
-                </a>
+                {reply.proxied ? (
+                  <ProxyName proxied={reply.proxied} />
+                ) : (
+                  <a
+                    rel="nofollow noopener noreferrer"
+                    target="_blank"
+                    href={reply.author.url}
+                    className="flex min-w-0 items-center"
+                  >
+                    <span className="link-primary overflow-hidden text-ellipsis font-semibold">
+                      {reply.author.login}
+                    </span>
+                  </a>
+                )}
                 <a
                   rel="nofollow noopener noreferrer"
                   target="_blank"
@@ -72,7 +81,7 @@ export default function Reply({ reply, onReplyUpdate }: IReplyProps) {
                     {formatDateDistance(reply.createdAt)}
                   </time>
                 </a>
-                {reply.authorAssociation !== 'NONE' ? (
+                {!reply.proxied && reply.authorAssociation !== 'NONE' ? (
                   <div className="hidden text-xs leading-[18px] sm:inline-flex">
                     <span className="color-box-border-info font-medium capitalize rounded-xl border px-[7px]">
                       {t(reply.authorAssociation)}

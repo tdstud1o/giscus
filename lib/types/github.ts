@@ -37,6 +37,8 @@ interface GBaseComment {
   deletedAt: string | null;
   isMinimized: boolean;
   bodyHTML: string;
+  /** 原始 markdown。自托管扩展要靠它读「代发身份」标记（bodyHTML 里 HTML 注释会被 GitHub 剥掉）。 */
+  body: string;
   reactionGroups: GReactionGroup[];
 }
 

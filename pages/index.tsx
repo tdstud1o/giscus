@@ -44,6 +44,9 @@ export async function getStaticProps({ locale }: GetStaticPropsContext) {
     },
     authorAssociation: 'APP',
     bodyHTML: contentBefore,
+    // 首页自述用的示例评论，没有代发身份（proxied = null 即普通 GitHub 评论）
+    body: '',
+    proxied: null,
     createdAt: '2021-05-15T13:21:14Z',
     deletedAt: null,
     id: 'onboarding',
