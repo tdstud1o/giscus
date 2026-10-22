@@ -81,11 +81,10 @@ export default function CommentBox({
   const isWorker = allowAnon && mode !== 'github';
   const isAnon = allowAnon && mode === 'anon';
   const isAccount = allowAnon && mode === 'account';
-  // 有 GitHub 关联时 login 是用户名（补 @）；没有的话服务端退的是邮箱，不加 @ 前缀
+  // 显示名优先用 TD 账号的显示名（平台 userinfo.preferred_username，如「Timmoc」）；
+  // 没有才退回 GitHub 登录名（补 @），再没有就是邮箱（服务端退的，不加 @ 前缀）。
   const whoLabel = identity
-    ? identity.login.includes('@')
-      ? identity.login
-      : '@' + identity.login
+    ? identity.name || (identity.login.includes('@') ? identity.login : '@' + identity.login)
     : '';
   // 三档是否可选：TD 要平台会话（服务端验签得来），GitHub 要 giscus 自己的授权
   const canTd = !!identity;
@@ -338,20 +337,6 @@ export default function CommentBox({
               disabled={isSubmitting}
             />
             <span className="color-text-secondary text-xs">匿名评论不带 TD 标记，只署这个昵称</span>
-            {!identity && tdLogin ? (
-              <a
-                className="link-secondary inline-flex items-center gap-1 text-xs"
-                href={tdLogin}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="登录后以 TD 统一账号身份署名，不用每次手填昵称"
-              >
-                <span className="gsc-td-icon sm" aria-hidden="true">
-                  <img src="/td-icon.png" alt="" width={12} height={12} />
-                </span>{' '}
-                用 TD 账号登录
-              </a>
-            ) : null}
           </div>
         ) : null}
         {isPreview ? (
@@ -411,7 +396,12 @@ export default function CommentBox({
         // 匿名这一档没有头像、标记固定是黄色「匿名」—— 任何人填什么昵称都冒充不了 TD。
         <div className="gsc-id-bar">
           <div className="gsc-id-who">
-            {who.avatar ? (
+            {who.kind === 'account' && !who.avatar ? (
+              // TD 账号没有平台头像（邮箱注册、没绑 GitHub）时用标准图标，而不是首字母
+              <span className="gsc-td-icon" aria-hidden="true">
+                <img src="/td-icon.png" alt="" width={16} height={16} />
+              </span>
+            ) : who.avatar ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 className="gsc-id-avatar"
@@ -453,12 +443,13 @@ export default function CommentBox({
                 canTd
                   ? '以 TD 统一账号发表（身份由服务端验签，前端伪造不了）'
                   : tdLogin
-                    ? '先登录 TD，登录后这里会自动变成账号身份'
+                    ? '点这里去登录 TD，回来这一档就自动可用'
                     : '未接入 TD 登录'
               }
               onClick={() => {
+                // 没登录时点这一档 = 直接去登录；不再在别处另摆一条登录链接
                 if (canTd) switchMode('account');
-                else if (tdLogin) window.open(tdLogin, '_blank', 'noopener,noreferrer');
+                else if (tdLogin) window.open(tdLogin, '_top');
               }}
             >
               TD
@@ -471,10 +462,12 @@ export default function CommentBox({
               title={
                 canGh
                   ? '以 giscus 授权的 GitHub 账号发表（可回复、点赞）'
-                  : '要先在评论区授权 GitHub 才能用这一档'
+                  : '还没授权 GitHub：点这里去授权，回来就能用这一档'
               }
               onClick={() => {
+                // 没有 GitHub 授权时，点这一档 = 直接去授权（不再额外给一条「登录」链接）
                 if (canGh) switchMode('github');
+                else if (loginUrl) window.open(loginUrl, '_top');
               }}
             >
               GitHub
@@ -529,20 +522,9 @@ export default function CommentBox({
                   ? t('reply')
                   : t('comment')}
             </button>
-          ) : tdLogin ? (
-            // 博客已接入 TD 统一平台：未登录时优先引导走平台，一次登录全站通用
-            <a
-              className="btn btn-primary inline-flex items-center ml-1 rounded-md border hover:no-underline"
-              target="_blank"
-              rel="noopener noreferrer"
-              href={tdLogin}
-            >
-              <span className="gsc-td-icon mr-2" aria-hidden="true">
-                <img src="/td-icon.png" alt="" width={16} height={16} />
-              </span>{' '}
-              用 TD 账号登录
-            </a>
           ) : (
+            // 只有在「没接站方通道」或「GitHub 授权过期」时才会走到这里：
+            // TD 登录统一从上面三档滑块的 TD 档进，不再单独摆一条登录链接。
             <a
               className="btn btn-primary inline-flex items-center ml-1 rounded-md border hover:no-underline"
               target="_top"

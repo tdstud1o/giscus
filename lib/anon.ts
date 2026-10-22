@@ -26,6 +26,9 @@ export const BLOG_API_ORIGIN = (() => {
 })();
 
 export interface TdIdentity {
+  /** 平台账号的显示名（userinfo.preferred_username，如「Timmoc」）。没有就退回 login。 */
+  name: string;
+  /** GitHub 登录名（没有关联 GitHub 时是邮箱）。只在需要 @ 前缀或兜底时用。 */
   login: string;
   isAdmin: boolean;
   isFriend: boolean;
@@ -94,6 +97,7 @@ export async function refreshTdIdentity(): Promise<TdIdentity | null> {
     });
     const json = (await res.json()) as {
       logged_in?: boolean;
+      name?: string;
       github_login?: string;
       github_id?: string;
       is_admin?: boolean;
@@ -104,6 +108,7 @@ export async function refreshTdIdentity(): Promise<TdIdentity | null> {
     if (session !== tdSession) return tdIdentity; // 期间会话被换掉了，丢弃本次结果
     tdIdentity = json?.logged_in
       ? {
+          name: json.name || '',
           login: json.github_login || json.github_id || '',
           isAdmin: !!json.is_admin,
           isFriend: !!json.is_friend,
