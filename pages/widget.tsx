@@ -128,7 +128,16 @@ export default function WidgetPage() {
         return;
       }
 
-      setConfig((prevConfig) => ({ ...prevConfig, ...newConfig }));
+      // 父页会反复下发 setConfig（主题同步、身份补发都会顺带带一份）。
+      // 每次都新建对象 → ConfigContext 换引用 → 整个评论区重渲染一次；
+      // 父页在几秒内连发七八次，观感就是「一闪一闪」。没有实际变化就返回原对象，
+      // React 会直接 bail out，一次渲染都不发生。
+      setConfig((prevConfig) => {
+        const patch = newConfig as unknown as Record<string, unknown>;
+        const prev = prevConfig as unknown as Record<string, unknown>;
+        if (Object.keys(patch).every((key) => prev[key] === patch[key])) return prevConfig;
+        return { ...prevConfig, ...patch } as WidgetQuery['config'];
+      });
     };
 
     window.addEventListener('message', handleMessage);

@@ -115,8 +115,15 @@ export default function CommentBox({
       : mode === 'github'
         ? {
             kind: 'github' as const,
-            name: viewer?.login || 'GitHub 账号',
-            avatar: viewer?.avatarUrl || '',
+            // viewer 要等「带用户令牌」的那次查询回来才有。在那之前（以及 Discussion
+            // 还没建、接口返回 404 的场景）用 TD 账号绑定的 GitHub 登录名兜底，
+            // 头像按登录名拼 —— 总比显示「GitHub 账号」+ 首字母占位强。
+            name: viewer?.login || identity?.ghLogin || 'GitHub 账号',
+            avatar:
+              viewer?.avatarUrl ||
+              (identity?.ghLogin
+                ? `https://github.com/${encodeURIComponent(identity.ghLogin)}.png?size=64`
+                : ''),
             extra: '',
           }
         : {
@@ -331,21 +338,6 @@ export default function CommentBox({
         </div>
       </div>
       <div className="gsc-comment-box-main">
-        {isAnon ? (
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <input
-              className="form-control input-contrast color-bg-primary color-border-primary w-40 rounded border px-2 py-1 text-sm"
-              type="text"
-              maxLength={24}
-              placeholder="昵称（必填）"
-              aria-label="匿名评论昵称"
-              value={nickname}
-              onChange={(event) => setNickname(event.target.value)}
-              disabled={isSubmitting}
-            />
-            <span className="color-text-secondary text-xs">匿名评论不带 TD 标记，只署这个昵称</span>
-          </div>
-        ) : null}
         {isPreview ? (
           // The <div> element *might* have a child <button> element from
           // GitHub's markdown renderer result that allows keyboard interaction.
@@ -418,7 +410,6 @@ export default function CommentBox({
                 alt=""
                 width={20}
                 height={20}
-                loading="lazy"
                 referrerPolicy="no-referrer"
               />
             ) : (
@@ -430,9 +421,26 @@ export default function CommentBox({
                   (who.kind === 'anon' ? '匿' : 'T')}
               </span>
             )}
-            <span className="gsc-id-name" title={who.name}>
-              {who.name}
-            </span>
+            {isAnon ? (
+              // 昵称就地编辑。以前是评论框上方单独一行，切到匿名整块高约 40px，
+              // iframe 一变矮，手机端滚动位置就被浏览器夹紧（「页面自己往上弹一段」）。
+              // 放进身份条里，三档高度完全一致，切换不再引起任何布局变化。
+              <input
+                className="gsc-id-name-input"
+                type="text"
+                maxLength={24}
+                placeholder="填个昵称"
+                aria-label="匿名评论昵称"
+                title="匿名评论不带 TD 标记，只署这个昵称"
+                value={nickname}
+                onChange={(event) => setNickname(event.target.value)}
+                disabled={isSubmitting}
+              />
+            ) : (
+              <span className="gsc-id-name" title={who.name}>
+                {who.name}
+              </span>
+            )}
             <span className={`gsc-id-badge gsc-id-${who.kind}`}>{whoBadge}</span>
             {who.extra ? <span className="gsc-id-extra">{who.extra}</span> : null}
           </div>

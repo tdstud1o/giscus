@@ -74,34 +74,33 @@ export default function Widget({ origin, session }: IWidgetProps) {
     return subscribeTdIdentity(sync);
   }, []);
 
-  // 父页（博客）的 iframe 高度全靠这里回传。两条通道：
+  // 父页（博客）的 iframe 高度全靠这里回传。两条观察通道，一条上报：
   //   1. ResizeObserver —— 常规通道，尺寸一变就报；
   //   2. MutationObserver —— 兜底。跨域 iframe 在视口外时，Chromium 会挂起它的渲染更新，
   //      ResizeObserver 的回调不再投递（连 observe() 的初始回调都收不到），但 JS 与布局照跑，
   //      DOM 变更照样通知。没有这条兜底，离屏的评论框会一直停在父页 CSS 的 min-height，
   //      直到用户把它滚进视口才「突然长出来」。
+  // 两条都只负责「预约上报」，真正发送走同一条防抖通道：尺寸变化往往连着来
+  // （骨架 → 内容 → 头像解码），逐次上报会让父页 iframe 的高度连续跳变，
+  // 移动端滚动位置被浏览器反复夹紧，表现为「页面自己往上弹一段」。
   useEffect(() => {
     let lastHeight = 0;
-    const report = (height: number) => {
-      const value = Math.ceil(height);
-      if (!value || value === lastHeight) return;
-      lastHeight = value;
-      emitData<IResizeHeightMessage>({ resizeHeight: value }, origin);
+    let timer = 0;
+
+    const report = () => {
+      const height = Math.ceil(document.body.getBoundingClientRect().height);
+      if (!height || height === lastHeight) return;
+      lastHeight = height;
+      emitData<IResizeHeightMessage>({ resizeHeight: height }, origin);
     };
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) report(entry.contentRect.height);
-    });
+    const schedule = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(report, 120);
+    };
 
-    let mutationTimer = 0;
-    const mutationObserver = new MutationObserver(() => {
-      window.clearTimeout(mutationTimer);
-      mutationTimer = window.setTimeout(
-        () => report(document.body.getBoundingClientRect().height),
-        150,
-      );
-    });
+    const resizeObserver = new ResizeObserver(schedule);
+    const mutationObserver = new MutationObserver(schedule);
 
     const body = document.body;
     resizeObserver.observe(body);
@@ -110,11 +109,17 @@ export default function Widget({ origin, session }: IWidgetProps) {
     return () => {
       resizeObserver.disconnect();
       mutationObserver.disconnect();
-      window.clearTimeout(mutationTimer);
+      window.clearTimeout(timer);
     };
   }, [origin]);
 
-  const ready = (!session || token) && repo && (term || number);
+  // 不要等 token 再渲染：接口在没有用户令牌时会自动退回 GitHub App 令牌，
+  // 先拉一次就能把评论显示出来；用户令牌（TD 绑定的 GitHub / giscus 自己的授权）
+  // 是异步到的，到了再拉第二次补 viewer 与 reactions 状态 —— 那一枪由
+  // useDiscussion 的 keepPreviousData 兜住，不会把已有评论换成骨架。
+  // 以前这里是 `(!session || token)`：一旦本地 session 过期取不到 token，
+  // token 永远为空，整个 iframe 就一直是空白的（「第一次没刷出来评论」）。
+  const ready = !!repo && !!(term || number);
 
   return ready ? (
     <AuthContext.Provider value={{ token, origin, getLoginUrl, onSignOut: handleSignOut }}>

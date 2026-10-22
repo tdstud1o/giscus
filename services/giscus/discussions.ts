@@ -4,6 +4,7 @@ import useSWRInfinite from 'swr/infinite';
 import { cleanParams, fetcher } from '../../lib/fetcher';
 import { Reaction, updateDiscussionReaction } from '../../lib/reactions';
 import { IComment, IGiscussion, IReply } from '../../lib/types/adapter';
+import { GUser } from '../../lib/types/github';
 import { DiscussionQuery, PaginationParams } from '../../lib/types/common';
 import { CommentOrder, IDiscussionData } from '../../lib/types/giscus';
 import { env } from '../../lib/variables';
@@ -42,6 +43,12 @@ export function useDiscussion(
     getKey,
     fetcher,
     {
+      // 缓存键里含 Authorization（带不带 token 是两份数据）。而 token 是异步到的：
+      // 先无 token 拉一次、TD 平台下发 GitHub 令牌后再拉一次 —— 两次键不同。
+      // 没有 keepPreviousData 时，第二次会把 data 置空 → isLoading 变 true →
+      // 整个评论区被 loading 骨架替换（读者看到的就是「闪一下、评论消失再出现」）。
+      // 保留上一份数据，第二次数据到了原地替换即可。
+      keepPreviousData: true,
       onErrorRetry: (err, key, config, revalidate, opts) => {
         if (!shouldRevalidate(err?.status)) return;
         SWRConfig.defaultValue.onErrorRetry(err, key, config, revalidate, opts);
@@ -277,7 +284,10 @@ export function useFrontBackDiscussion(
     totalReplyCount,
   };
 
-  const viewer = backData?.viewer;
+  // Discussion 还没创建时接口是 404，但响应体里带着 viewer（worker/index.ts）。
+  // 不从这里兜一手的话，「GitHub 那一档」会退化成「GitHub 账号」+ 首字母占位。
+  const errorViewer = (backError as { data?: { viewer?: GUser } } | undefined)?.data?.viewer;
+  const viewer = backData?.viewer || errorViewer;
 
   return {
     addNewComment,

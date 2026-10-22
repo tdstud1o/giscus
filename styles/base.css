@@ -482,6 +482,13 @@ img.emoji {
 
 .gsc-loading {
   @apply flex flex-col items-center gap-4;
+
+  /* 加载态撑到接近成品的量级。原来只有一个 48px 转圈 + 一行字（≈84px），
+     而父页在拿到第一个高度前是按 420px 占位的 —— 一旦上报 84px，iframe 立刻
+     从 420 缩到 84，文档变矮、滚动位置被夹紧，移动端看起来就是「页面自己往上弹」，
+     紧接着数据回来又长回 444，于是又弹一次。撑到 320px 把这段落差压到最小。 */
+  min-height: 320px;
+  justify-content: center;
 }
 
 .gsc-loading-image {
@@ -1039,11 +1046,13 @@ img.emoji {
  * --------------------------------------------------------------- */
 
 .gsc-id-bar {
-  @apply mx-2 mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2;
+  @apply mx-2 mb-2 flex flex-nowrap items-center justify-between gap-x-3;
 }
 
+/* 身份条的左侧要能被压缩：匿名档的昵称是输入框，窄屏上让它让步，
+   整条不换行 —— 一旦换行，身份条会高出一行，切换身份时页面又跳了。 */
 .gsc-id-who {
-  @apply flex min-w-0 items-center gap-1.5;
+  @apply flex min-w-0 flex-1 items-center gap-1.5;
 }
 
 .gsc-id-avatar {
@@ -1058,6 +1067,34 @@ img.emoji {
   @apply max-w-[12rem] truncate text-xs font-medium;
 
   color: var(--color-fg-default, var(--color-text-primary));
+}
+
+/* 匿名档的昵称就地编辑：高度与 .gsc-id-name 一致（18px 行高 + 2px 边框），
+   三档切换时身份条总高度不变 —— 这是「切身份不跳」的关键。
+   不继承主题的 input 样式，避免 form-control 那套 padding 把它撑高。 */
+.gsc-id-name-input {
+  @apply min-w-0 rounded px-1.5 text-xs font-medium;
+
+  flex: 1 1 4rem;
+  width: auto;
+  min-width: 3.5rem;
+  max-width: 9rem;
+  height: 20px;
+  margin: -1px 0;
+  border: 1px solid transparent;
+  background-color: rgb(127 127 127 / 12%);
+  color: var(--color-fg-default, var(--color-text-primary));
+  font-family: inherit;
+}
+
+.gsc-id-name-input::placeholder {
+  color: var(--color-fg-muted, var(--color-text-secondary));
+}
+
+.gsc-id-name-input:focus {
+  border-color: #d4a72c;
+  outline: none;
+  background-color: var(--color-canvas-default, transparent);
 }
 
 .gsc-id-extra {

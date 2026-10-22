@@ -154,7 +154,9 @@ async function discussionsGet(request: Request, url: URL, env: Env) {
         : null
       : data.repository.discussion;
 
-  if (!discussion) return json({ error: 'Discussion not found' }, 404);
+  // 「Discussion 还没建」不等于「没有读者身份」：viewer 早就查回来了，一起带出去。
+  // 不带的话前端拿不到 GitHub 头像与登录名，评论框会退化成「GitHub 账号」+ 首字母占位。
+  if (!discussion) return json({ error: 'Discussion not found', viewer }, 404);
 
   return json(adaptDiscussion({ viewer, discussion }));
 }
