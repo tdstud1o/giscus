@@ -1075,9 +1075,9 @@ img.emoji {
 .gsc-id-name-input {
   @apply min-w-0 rounded px-1.5 text-xs font-medium;
 
-  flex: 1 1 4rem;
+  flex: 1 1 5rem;
   width: auto;
-  min-width: 3.5rem;
+  min-width: 4.5rem;
   max-width: 9rem;
   height: 20px;
   margin: -1px 0;

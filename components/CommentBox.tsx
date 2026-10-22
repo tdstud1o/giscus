@@ -429,7 +429,7 @@ export default function CommentBox({
                 className="gsc-id-name-input"
                 type="text"
                 maxLength={24}
-                placeholder="填个昵称"
+                placeholder="昵称"
                 aria-label="匿名评论昵称"
                 title="匿名评论不带 TD 标记，只署这个昵称"
                 value={nickname}
