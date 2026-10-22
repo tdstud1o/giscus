@@ -5,6 +5,7 @@ import { createDiscussion } from '../services/github/createDiscussion';
 import { getDiscussion } from '../services/github/getDiscussion';
 import { getDiscussionCategories } from '../services/github/getDiscussionCategories';
 import { getAppAccessToken } from './appToken';
+import { parseRepoWithOwner } from '../lib/utils';
 import type { Env } from './env';
 import { decodeState, encodeState } from './state';
 
@@ -116,6 +117,42 @@ function pickDiscussionByTerm(nodes: any[], term: string, strict: boolean) {
   )[0];
 }
 
+/**
+ * 搜索兜底：按标题把整个仓库的 Discussion 扫一遍。
+ *
+ * GitHub 的 Discussion 搜索索引并不可靠 —— 线上有几条老 Discussion（#3 / #5 / #40）
+ * 用 `in:title` 怎么都搜不到，但 `repository.discussions` 里躺着好好的。搜不到就会被
+ * 当成「还没建讨论」，于是又新建一条，评论继续被拆散。
+ * 只在搜索没命中时走这条路，翻页最多 3 屏（300 条）防失控。
+ */
+async function findDiscussionByTitle(token: string, repo: string, term: string) {
+  const { owner, name } = parseRepoWithOwner(repo);
+  let after: string | null = null;
+  for (let page = 0; page < 3; page++) {
+    const response: any = await fetch(`${GITHUB_API_HOST}/graphql`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query($owner: String!, $name: String!, $after: String) {
+          repository(owner: $owner, name: $name) {
+            discussions(first: 100, after: $after, orderBy: { field: CREATED_AT, direction: ASC }) {
+              pageInfo { hasNextPage endCursor }
+              nodes { id url number title createdAt }
+            }
+          }
+        }`,
+        variables: { owner, name, after },
+      }),
+    }).then((r) => r.json());
+    const discussions = response?.data?.repository?.discussions;
+    const hit = pickDiscussionByTerm(discussions?.nodes || [], term, false);
+    if (hit) return hit;
+    if (!discussions?.pageInfo?.hasNextPage) break;
+    after = discussions.pageInfo.endCursor;
+  }
+  return null;
+}
+
 async function discussionsGet(request: Request, url: URL, env: Env) {
   const query = url.searchParams;
   const first = query.get('first');
@@ -169,10 +206,29 @@ async function discussionsGet(request: Request, url: URL, env: Env) {
   if (!data) return json({ error: 'Unable to fetch discussion' }, 500);
 
   const { viewer } = data;
-  const discussion =
+  const term = String(params.term || '');
+  let discussion =
     'search' in data
-      ? pickDiscussionByTerm(data.search.nodes || [], String(params.term || ''), !!params.strict)
+      ? pickDiscussionByTerm(data.search.nodes || [], term, !!params.strict)
       : data.repository.discussion;
+
+  // 搜索没命中不代表没建过：索引有洞（#3 / #5 / #40 这几条老讨论就搜不出来）。
+  // 不兜这一手会被当成「还没建讨论」→ 前端放行「发首条」→ 又新建一条同标题讨论。
+  // 兜底扫出来的只有元数据，还要按 number 再取一次完整数据（评论分页、reactions 都在里面）。
+  if (!discussion && 'search' in data && term && !params.strict) {
+    try {
+      const found = await findDiscussionByTitle(token, String(params.repo), term);
+      if (found?.number) {
+        const full: any = await getDiscussion(
+          { ...params, term, number: found.number, strict: false } as any,
+          token,
+        );
+        discussion = full?.data?.repository?.discussion || null;
+      }
+    } catch {
+      // 兜底失败就按未找到处理，不影响主流程
+    }
+  }
 
   // 「Discussion 还没建」不等于「没有读者身份」：viewer 早就查回来了，一起带出去。
   // 不带的话前端拿不到 GitHub 头像与登录名，评论框会退化成「GitHub 账号」+ 首字母占位。
@@ -215,7 +271,9 @@ async function discussionsPost(request: Request, env: Env) {
       { repo, term: input.title, category: '', number: 0, strict: false, first: 1 } as any,
       token,
     );
-    const existing = pickDiscussionByTerm(probe?.data?.search?.nodes || [], input.title, false);
+    const existing =
+      pickDiscussionByTerm(probe?.data?.search?.nodes || [], input.title, false) ||
+      (await findDiscussionByTitle(token, repo, input.title).catch(() => null));
     if (existing) return json({ id: existing.id, reused: true });
   } catch {
     // 查重失败（网络/限流）不该挡住正常建帖，继续往下走
