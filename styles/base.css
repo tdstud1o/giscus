@@ -1144,3 +1144,35 @@ img.emoji {
 .gsc-id-switch > button:not([aria-checked='true'], [aria-disabled='true']):hover {
   color: var(--color-fg-default, var(--color-text-primary));
 }
+
+/* TD 标准图标（六边形线框立方体）：白底小砖托着，深浅主题与彩色按钮上都一样清楚。
+   源图 public/td-icon.png，与平台 /td-icon.png 是同一份字节。 */
+.gsc-td-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: #fff;
+  border: 1px solid rgb(127 127 127 / 25%);
+  flex: none;
+  vertical-align: middle;
+}
+
+.gsc-td-icon img {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.gsc-td-icon.sm {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.gsc-td-icon.sm img {
+  width: 12px;
+  height: 12px;
+}

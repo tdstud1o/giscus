@@ -1,4 +1,4 @@
-import { MarkdownIcon, MarkGithubIcon, PersonIcon, SignOutIcon } from '@primer/octicons-react';
+import { MarkdownIcon, MarkGithubIcon, SignOutIcon } from '@primer/octicons-react';
 import { ChangeEvent, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { adaptComment, adaptReply, handleCommentClick, processCommentBody } from '../lib/adapter';
 import {
@@ -346,7 +346,10 @@ export default function CommentBox({
                 rel="noopener noreferrer"
                 title="登录后以 TD 统一账号身份署名，不用每次手填昵称"
               >
-                <PersonIcon fill="currentColor" /> 用 TD 账号登录
+                <span className="gsc-td-icon sm" aria-hidden="true">
+                  <img src="/td-icon.png" alt="" width={12} height={12} />
+                </span>{' '}
+                用 TD 账号登录
               </a>
             ) : null}
           </div>
@@ -534,7 +537,10 @@ export default function CommentBox({
               rel="noopener noreferrer"
               href={tdLogin}
             >
-              <PersonIcon className="mr-2" fill="currentColor" /> 用 TD 账号登录
+              <span className="gsc-td-icon mr-2" aria-hidden="true">
+                <img src="/td-icon.png" alt="" width={16} height={16} />
+              </span>{' '}
+              用 TD 账号登录
             </a>
           ) : (
             <a
