@@ -64,6 +64,11 @@ export default function Giscus({ onDiscussionCreateRequest, onError }: IGiscusPr
   // 站方 Worker 要求以 "/" 开头的站内路径，这里补齐。URL 型 term 直接不启用匿名。
   const anonArticle = !term || /^https?:/i.test(term) ? '' : `/${term.replace(/^\/+/, '')}`;
 
+  // GitHub 那一档要显示自己的头像与昵称：viewer 由 GraphQL 一起查回来（未授权时为空）。
+  const viewer = data.viewer
+    ? { login: data.viewer.login, avatarUrl: data.viewer.avatarUrl }
+    : undefined;
+
   // 站方 Worker 代发的评论（TD 账号 / 匿名）绕过了本地 mutator，写完统一重新拉一遍。
   // GitHub 侧刚写入的评论，列表查询要过几秒才反映出来 —— 补几次延时重拉，
   // 否则读者以为没发出去、手动刷新才看到。
@@ -84,6 +89,7 @@ export default function Giscus({ onDiscussionCreateRequest, onError }: IGiscusPr
       onDiscussionCreateRequest={handleDiscussionCreateRequest}
       anonArticle={anonArticle}
       onAnonSubmitted={revalidate}
+      viewer={viewer}
     />
   );
 
@@ -224,6 +230,7 @@ export default function Giscus({ onDiscussionCreateRequest, onError }: IGiscusPr
                         replyToId={comment.id}
                         anonArticle={anonArticle}
                         onAnonSubmitted={revalidate}
+                        viewer={viewer}
                       />
                     ) : undefined
                   }

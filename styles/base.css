@@ -1028,3 +1028,119 @@ img.emoji {
   text-decoration: underline;
   color: var(--color-prettylights-syntax-constant-other-reference-link);
 }
+
+/* ---------------------------------------------------------------
+ * 身份条（自托管扩展，非上游功能）
+ *
+ * 三档滑块 TD / GitHub / 匿名。颜色就是身份语义：TD 蓝、GitHub 紫黑、匿名黄，
+ * 评论正文顶部的署名标记沿用同一套色。滑块 = 一个绝对定位的胶囊 +
+ * translateX(0/100%/200%)，不引入动画库，也不依赖主题变量（三种底色在
+ * 深浅主题下都要能看清，所以取饱和色而不是 canvas 系）。
+ * --------------------------------------------------------------- */
+
+.gsc-id-bar {
+  @apply mx-2 mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2;
+}
+
+.gsc-id-who {
+  @apply flex min-w-0 items-center gap-1.5;
+}
+
+.gsc-id-avatar {
+  @apply h-5 w-5 shrink-0 rounded-full object-cover;
+}
+
+.gsc-id-avatar-text {
+  @apply inline-flex items-center justify-center text-[10px] font-bold uppercase leading-none;
+}
+
+.gsc-id-name {
+  @apply max-w-[12rem] truncate text-xs font-medium;
+
+  color: var(--color-fg-default, var(--color-text-primary));
+}
+
+.gsc-id-extra {
+  @apply text-[11px];
+
+  color: var(--color-fg-muted, var(--color-text-secondary));
+}
+
+.gsc-id-badge {
+  @apply inline-flex h-[18px] items-center rounded px-1.5 text-[11px] font-semibold leading-none;
+}
+
+.gsc-id-account {
+  background-color: #0969da;
+  color: #fff;
+}
+
+.gsc-id-github {
+  background-color: #5b3aa8;
+  color: #fff;
+}
+
+.gsc-id-anon {
+  background-color: #d4a72c;
+  color: #24292f;
+}
+
+.gsc-id-switch {
+  --id-thumb: #0969da;
+  --id-thumb-fg: #fff;
+
+  @apply relative inline-grid shrink-0 rounded-full p-[2px];
+
+  grid-template-columns: repeat(3, minmax(44px, 1fr));
+  height: 26px;
+  border: 1px solid var(--color-border-default, var(--color-border-primary));
+  background-color: var(--color-canvas-subtle, rgb(127 127 127 / 12%));
+}
+
+.gsc-id-switch[data-mode='github'] {
+  --id-thumb: #5b3aa8;
+  --id-thumb-fg: #fff;
+}
+
+.gsc-id-switch[data-mode='anon'] {
+  --id-thumb: #d4a72c;
+  --id-thumb-fg: #24292f;
+}
+
+.gsc-id-switch-thumb {
+  @apply absolute rounded-full;
+
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / 3);
+  background-color: var(--id-thumb);
+  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.18s ease;
+}
+
+.gsc-id-switch[data-mode='github'] .gsc-id-switch-thumb {
+  transform: translateX(100%);
+}
+
+.gsc-id-switch[data-mode='anon'] .gsc-id-switch-thumb {
+  transform: translateX(200%);
+}
+
+.gsc-id-switch > button {
+  @apply relative z-10 rounded-full text-[11px] font-semibold leading-none;
+
+  color: var(--color-fg-muted, var(--color-text-secondary));
+  transition: color 0.15s ease;
+}
+
+.gsc-id-switch > button[aria-checked='true'] {
+  color: var(--id-thumb-fg);
+}
+
+.gsc-id-switch > button[aria-disabled='true'] {
+  @apply cursor-not-allowed opacity-40;
+}
+
+.gsc-id-switch > button:not([aria-checked='true'], [aria-disabled='true']):hover {
+  color: var(--color-fg-default, var(--color-text-primary));
+}

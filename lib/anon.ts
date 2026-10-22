@@ -30,6 +30,9 @@ export interface TdIdentity {
   isAdmin: boolean;
   isFriend: boolean;
   level: string;
+  // 平台下发的头像（OIDC picture，老会话没有就退回 github.com/<login>.png）。
+  // 空串表示这个账号没有头像，UI 退化成首字母。
+  avatarUrl: string;
 }
 
 // —— 父页面下发的会话（模块级，够用且不必穿 React context） ——
@@ -96,6 +99,7 @@ export async function refreshTdIdentity(): Promise<TdIdentity | null> {
       is_admin?: boolean;
       is_friend?: boolean;
       id_level?: string;
+      avatar_url?: string;
     };
     if (session !== tdSession) return tdIdentity; // 期间会话被换掉了，丢弃本次结果
     tdIdentity = json?.logged_in
@@ -104,6 +108,7 @@ export async function refreshTdIdentity(): Promise<TdIdentity | null> {
           isAdmin: !!json.is_admin,
           isFriend: !!json.is_friend,
           level: json.id_level || '',
+          avatarUrl: json.avatar_url || '',
         }
       : null;
   } catch {
@@ -122,6 +127,9 @@ export interface CommentParams {
   body: string;
   // 父评论 node id（DC_xxx）：填了就是回复，服务端校验它属于本文对应的 Discussion
   replyTo?: string;
+  // true = 明确以匿名身份发。即使浏览器里存着 TD 会话也**不带** x-session，
+  // 否则服务端会把这条当 TD 账号发的（署名与蓝色 TD 标记来自会话，不是前端能选的）。
+  asAnonymous?: boolean;
 }
 
 interface CommentResponse {
@@ -132,7 +140,9 @@ interface CommentResponse {
 
 export async function submitComment(params: CommentParams): Promise<string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (tdSession) headers['x-session'] = tdSession;
+  // 只有「以 TD 账号发」才带会话。匿名模式下带上去 = 匿名被账号顶掉，
+  // 蓝色 TD 标记也就失去意义了（服务端只认会话，不认前端声明的身份）。
+  if (tdSession && !params.asAnonymous) headers['x-session'] = tdSession;
 
   const payload = {
     article: params.article,
