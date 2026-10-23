@@ -79,7 +79,7 @@
   }
 
   // Check anchor of the existing container and append it to origin URL
-  const existingContainer = document.querySelector('.giscus');
+  const existingContainer = document.querySelector<HTMLElement>('.giscus');
   const id = existingContainer && existingContainer.id;
   if (id) {
     params.origin = `${cleanedLocation}#${id}`;
@@ -119,17 +119,44 @@
   document.head.prepend(style);
 
   // Insert iframe element
+  let container: HTMLElement;
   if (!existingContainer) {
     const iframeContainer = document.createElement('div');
     iframeContainer.setAttribute('class', 'giscus');
     iframeContainer.appendChild(iframeElement);
 
     script.insertAdjacentElement('afterend', iframeContainer);
+    container = iframeContainer;
   } else {
     while (existingContainer.firstChild) existingContainer.firstChild.remove();
     existingContainer.appendChild(iframeElement);
+    container = existingContainer;
   }
   const suggestion = `Please consider reporting this error at https://github.com/giscus/giscus/issues/new.`;
+
+  // —— iframe 高度策略 ——
+  // 移动端的铁律：**文档一变矮，浏览器立刻把 scrollY 夹到新的上限**。
+  // 读者在评论区里一滑，iframe 高度这时只要缩几百像素，页面就被「弹」到评论区外面，
+  // 缩多少跳多少，而且夹紧之后再也回不到原来的位置（实测 881→380 会跳 501px）。
+  //
+  // 所以：iframe 如实跟随内容（内容永远完整显示，不留裁切），但**外层容器只记住
+  // 见过的最大高度**并作为 min-height。变矮时由容器撑住，文档总高度不缩，
+  // 滚动位置就永远不会被抢走。转屏 / 改窗口时重置，让新布局重新决定高度。
+  let maxFrameHeight = 0;
+
+  function applyHeight(next: number) {
+    if (!next) return;
+    iframeElement.style.height = `${next}px`;
+    if (next > maxFrameHeight) {
+      maxFrameHeight = next;
+      container.style.minHeight = `${next}px`;
+    }
+  }
+
+  window.addEventListener('resize', () => {
+    maxFrameHeight = 0;
+    container.style.minHeight = '';
+  });
 
   function signOut() {
     delete params.session;
@@ -145,7 +172,7 @@
     if (!(typeof data === 'object' && data.giscus)) return;
 
     if (data.giscus.resizeHeight) {
-      iframeElement.style.height = `${data.giscus.resizeHeight}px`;
+      applyHeight(Number(data.giscus.resizeHeight) || 0);
     }
 
     if (data.giscus.signOut) {
