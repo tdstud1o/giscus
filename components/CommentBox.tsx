@@ -417,8 +417,7 @@ export default function CommentBox({
                 className={`gsc-id-avatar gsc-id-avatar-text gsc-id-${who.kind}`}
                 aria-hidden="true"
               >
-                {(who.kind === 'anon' ? nickname.trim() : who.name.replace(/^@/, '')).charAt(0) ||
-                  (who.kind === 'anon' ? '匿' : 'T')}
+                {who.kind === 'anon' ? '匿' : who.name.replace(/^@/, '').charAt(0) || 'T'}
               </span>
             )}
             {isAnon ? (
@@ -441,7 +440,12 @@ export default function CommentBox({
                 {who.name}
               </span>
             )}
-            <span className={`gsc-id-badge gsc-id-${who.kind}`}>{whoBadge}</span>
+            {who.kind === 'anon' ? null : (
+              // 匿名档不再挂「匿名」黄标：右边滑块已经亮着「匿名」，昵称框旁边再放一个
+              // 同字标签在手机窄屏上纯占位。黄色的「匿」头像 + 滑块选中态已经说明身份，
+              // 正文顶部的署名标记也没有变（仍记 k=anon），只是少了一个重复的字。
+              <span className={`gsc-id-badge gsc-id-${who.kind}`}>{whoBadge}</span>
+            )}
             {who.extra ? <span className="gsc-id-extra">{who.extra}</span> : null}
           </div>
           <div
