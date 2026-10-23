@@ -53,6 +53,9 @@ export interface IResizeHeightMessage {
 
 export interface ISignOutMessage {
   signOut: boolean;
+  // 本次登出还要带上「TD 会话」：会话密文存在父页 localStorage 里，iframe 碰不到，
+  // 只能让父页去清。缺了它就是「假登出」—— 刷新后父页又把会话发回来。
+  tdSignOut?: boolean;
 }
 
 // parent-to-giscus messages

@@ -3,6 +3,15 @@
   const script = document.currentScript as HTMLScriptElement;
   const giscusOrigin = new URL(script.src).origin;
 
+  // 宿主站点可选提供的钩子（博客侧 comments.html / extend_footer.html 定义了这两个）：
+  //   __tdSignOut       —— 站点自己的登出（清头部身份、背景图池回 normal）
+  //   __giscusRefresh   —— 让站点把「当前登录态」重新下发给重载后的 iframe
+  // 都不是必需的：别的站点引这套 client 时它们不存在，行为退回原样。
+  const tdHooks = window as unknown as {
+    __tdSignOut?: () => void;
+    __giscusRefresh?: () => void;
+  };
+
   function formatError(message: string) {
     return `[giscus] An error occurred. Error message: "${message}".`;
   }
@@ -176,9 +185,24 @@
     }
 
     if (data.giscus.signOut) {
+      // TD 会话（博客自己的登录态 blog_session）存在父页 localStorage 里，iframe
+      // 读不到也删不掉。只清 giscus 自己的 GitHub 会话 = 假登出：父页一下发身份，
+      // 评论框又变回 TD，刷新更是直接「自动登录」。
+      if (data.giscus.tdSignOut) {
+        try {
+          localStorage.removeItem('blog_session');
+          localStorage.removeItem('tmoc_bg_me');
+        } catch {
+          // localStorage 被禁用：没什么可清的，继续走下面的 iframe 重建
+        }
+        // 博客头部的头像卡片 / 背景图池跟着回到未登录（站点没提供钩子就只能等刷新）
+        tdHooks.__tdSignOut?.();
+      }
       localStorage.removeItem(GISCUS_SESSION_KEY);
       console.log(`[giscus] User has logged out. Session has been cleared.`);
       signOut();
+      // iframe 被重建了，让它重新问父页要一次身份（这时拿到的会是空串 = 未登录）
+      tdHooks.__giscusRefresh?.();
       return;
     }
 

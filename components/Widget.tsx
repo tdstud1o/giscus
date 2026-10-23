@@ -49,6 +49,9 @@ export default function Widget({ origin, session }: IWidgetProps) {
     emitData<ISignOutMessage & IErrorMessage>(
       {
         signOut: true,
+        // 有 TD 会话时必须连它一起登出，否则父页刷新后重新下发会话 = 假登出。
+        // 会话密文只有父页 localStorage 有，iframe 读不到也删不掉，只能托父页代劳。
+        tdSignOut: !!getTdIdentity(),
         // HACK: For client scripts that haven't been updated to support sign out,
         // use the error message handler to sign out. Remove this after a reasonable
         // period of time.

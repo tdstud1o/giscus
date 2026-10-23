@@ -510,7 +510,9 @@ export default function CommentBox({
         </div>
       ) : null}
       <div className="gsc-comment-box-bottom">
-        {token && !isReply ? (
+        {/* 有 TD 会话也算「已登录」：TA 的 GitHub 未必绑过，但退出登录必须给 ——
+            否则只能去页头点，而评论区的按钮还在那儿摆着（点了又只会假登出）。 */}
+        {(token || identity) && !isReply ? (
           <button type="button" className="link-secondary text-sm" onClick={onSignOut}>
             <SignOutIcon className="mr-2" />
             {t('signOut')}
